@@ -1,0 +1,138 @@
+<h2>Top Bar + Main Window Direction</h2>
+<p class="subtitle">Larger main workspace, icon-first controls, and close/minimize transitions into a small player surface.</p>
+
+<div class="cards">
+  <div class="card" data-choice="command-topbar" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0b0b0b; color:#f5f5f5; border-radius:8px; min-height:390px; overflow:hidden; border:1px solid #252525;">
+        <div style="height:44px; background:#070707; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:0 10px; border-bottom:1px solid #242424;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:28px; height:28px; border-radius:7px; background:#d72b2b; display:grid; place-items:center; font-size:15px;">♪</div>
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Home">⌂</div>
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Back">‹</div>
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Forward">›</div>
+          </div>
+          <div style="height:31px; background:#171717; border:1px solid #303030; border-radius:8px; display:grid; grid-template-columns:28px 1fr auto; align-items:center; padding:0 8px; color:#aaa; font-size:12px;">
+            <span style="font-size:16px;">⌕</span>
+            <span>Search songs, artists, albums, playlists</span>
+            <span style="font-size:10px; color:#777;">Ctrl K</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Player mode">▤</div>
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Meters">▥</div>
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Queue">☰</div>
+            <div style="width:34px; height:30px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;" title="Settings">⚙</div>
+            <div style="width:36px; height:30px; border-radius:7px; background:#151515; display:grid; place-items:center;" title="Mini-player">▱</div>
+            <div style="width:36px; height:30px; border-radius:7px; background:#151515; display:grid; place-items:center;" title="Maximize">□</div>
+            <div style="width:36px; height:30px; border-radius:7px; background:#151515; display:grid; place-items:center;" title="Close to player">×</div>
+          </div>
+        </div>
+        <div style="height:286px; background:#101010; display:grid; grid-template-columns:190px 1fr; position:relative;">
+          <div style="background:#0f0f0f; border-right:1px solid #242424; padding:14px; display:grid; gap:10px; align-content:start;">
+            <div style="height:24px; width:120px; background:#282828; border-radius:5px;"></div>
+            <div style="height:18px; width:144px; background:#202020; border-radius:4px;"></div>
+            <div style="height:18px; width:118px; background:#202020; border-radius:4px;"></div>
+            <div style="height:18px; width:132px; background:#202020; border-radius:4px;"></div>
+          </div>
+          <div style="padding:16px; display:grid; grid-template-rows:34px 1fr; gap:14px;">
+            <div style="display:flex; gap:8px;">
+              <div style="height:30px; width:72px; background:#272727; border-radius:7px; display:grid; place-items:center; font-size:11px;">Explore</div>
+              <div style="height:30px; width:74px; background:#1f1f1f; border-radius:7px; display:grid; place-items:center; font-size:11px;">Library</div>
+              <div style="height:30px; width:76px; background:#1f1f1f; border-radius:7px; display:grid; place-items:center; font-size:11px;">Playlists</div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; align-content:start;">
+              <div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div>
+              <div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div>
+            </div>
+          </div>
+          <div style="position:absolute; left:16px; right:16px; bottom:14px; border:1px solid #303030; background:rgba(15,15,15,.96); border-radius:8px; padding:10px; display:grid; grid-template-columns:50px 1fr auto 86px; gap:11px; align-items:center; box-shadow:0 18px 38px rgba(0,0,0,.48);">
+            <div style="width:50px; height:50px; border-radius:6px; background:linear-gradient(135deg,#b51d2d,#181818);"></div>
+            <div style="min-width:0;">
+              <div style="font-size:14px; font-weight:800;">Midnight City</div>
+              <div style="font-size:11px; color:#aaa;">M83</div>
+              <div style="height:6px; background:#303030; border-radius:99px; overflow:hidden; margin-top:7px;"><div style="width:42%; height:100%; background:#d72b2b;"></div></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:31px; height:31px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏮</div>
+              <div style="width:43px; height:43px; border-radius:50%; background:#d72b2b; display:grid; place-items:center; font-size:22px;">▶</div>
+              <div style="width:31px; height:31px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏭</div>
+              <div style="width:31px; height:31px; border-radius:7px; background:#242424; display:grid; place-items:center;">♡</div>
+              <div style="width:31px; height:31px; border-radius:7px; background:#242424; display:grid; place-items:center;">☰</div>
+            </div>
+            <div style="height:44px; display:flex; align-items:end; justify-content:end; gap:3px;">
+              <span style="height:28%; width:5px; background:#27ce73; border-radius:2px;"></span><span style="height:52%; width:5px; background:#27ce73; border-radius:2px;"></span><span style="height:83%; width:5px; background:#f3c34c; border-radius:2px;"></span><span style="height:66%; width:5px; background:#27ce73; border-radius:2px;"></span><span style="height:38%; width:5px; background:#27ce73; border-radius:2px;"></span>
+            </div>
+          </div>
+        </div>
+        <div style="height:62px; background:#0b0b0b; border-top:1px solid #202020; display:grid; grid-template-columns:1fr auto; align-items:center; padding:0 14px; color:#888; font-size:12px;">
+          <span>Close or minimize transitions to mini-player instead of disappearing.</span>
+          <div style="width:168px; height:42px; border:1px solid #303030; border-radius:8px; display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:8px; padding:0 8px; background:#151515;">
+            <div style="width:28px; height:28px; border-radius:5px; background:#8f1d2a;"></div>
+            <div style="min-width:0; color:#eee; font-size:10px;">Mini-player</div>
+            <div style="display:flex; gap:5px;"><span>⏮</span><span>▶</span><span>⏭</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Command Top Bar</h3>
+      <p>Icon-heavy top bar with a real search field, navigation, player/meter/queue shortcuts, settings, and close-to-player behavior.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="split-topbar" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0b0b0b; color:#f5f5f5; border-radius:8px; min-height:390px; overflow:hidden; border:1px solid #252525;">
+        <div style="height:40px; background:#070707; display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px; padding:0 10px; border-bottom:1px solid #242424;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:28px; height:28px; border-radius:7px; background:#d72b2b; display:grid; place-items:center;">♪</div>
+            <div style="width:30px; height:28px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;">⌂</div>
+            <div style="width:30px; height:28px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;">⌕</div>
+          </div>
+          <div style="justify-self:center; display:flex; gap:5px;">
+            <div style="width:34px; height:28px; border-radius:7px; background:#242424; display:grid; place-items:center;">▭</div>
+            <div style="width:34px; height:28px; border-radius:7px; background:#d72b2b; display:grid; place-items:center;">▰</div>
+            <div style="width:34px; height:28px; border-radius:7px; background:#242424; display:grid; place-items:center;">▦</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:30px; height:28px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;">▥</div>
+            <div style="width:30px; height:28px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;">☰</div>
+            <div style="width:30px; height:28px; border-radius:7px; background:#1d1d1d; display:grid; place-items:center;">⚙</div>
+            <div style="width:34px; height:28px; border-radius:7px; background:#151515; display:grid; place-items:center;">▱</div>
+            <div style="width:34px; height:28px; border-radius:7px; background:#151515; display:grid; place-items:center;">×</div>
+          </div>
+        </div>
+        <div style="height:350px; display:grid; grid-template-rows:54px 1fr 74px;">
+          <div style="background:#101010; border-bottom:1px solid #222; display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:0 16px;">
+            <div style="height:34px; background:#1a1a1a; border:1px solid #303030; border-radius:8px; display:flex; align-items:center; gap:9px; padding:0 12px; color:#aaa; font-size:12px;"><span>⌕</span><span>Search, explore, build playlists</span></div>
+            <div style="display:flex; gap:8px; font-size:11px;"><div style="height:30px; width:70px; border-radius:7px; background:#272727; display:grid; place-items:center;">Explore</div><div style="height:30px; width:70px; border-radius:7px; background:#1f1f1f; display:grid; place-items:center;">Library</div><div style="height:30px; width:74px; border-radius:7px; background:#1f1f1f; display:grid; place-items:center;">Playlist</div></div>
+          </div>
+          <div style="background:#111; padding:16px; display:grid; grid-template-columns:repeat(5,1fr); gap:12px; align-content:start;">
+            <div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div>
+            <div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div><div style="height:92px; background:#1b1b1b; border-radius:7px;"></div>
+          </div>
+          <div style="background:#0f0f0f; border-top:1px solid #252525; padding:10px 14px; display:grid; grid-template-columns:48px 1fr auto 78px; gap:10px; align-items:center;">
+            <div style="width:48px; height:48px; border-radius:6px; background:linear-gradient(135deg,#b51d2d,#181818);"></div>
+            <div><div style="font-size:14px; font-weight:800;">Midnight City</div><div style="font-size:11px; color:#aaa;">M83</div><div style="height:5px; background:#303030; border-radius:99px; margin-top:6px;"><div style="width:42%; height:100%; background:#d72b2b;"></div></div></div>
+            <div style="display:flex; align-items:center; gap:8px;"><div style="width:31px; height:31px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏮</div><div style="width:42px; height:42px; border-radius:50%; background:#d72b2b; display:grid; place-items:center;">▶</div><div style="width:31px; height:31px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏭</div></div>
+            <div style="height:42px; display:flex; align-items:end; gap:3px;"><span style="height:30%; width:5px; background:#27ce73;"></span><span style="height:55%; width:5px; background:#27ce73;"></span><span style="height:80%; width:5px; background:#f3c34c;"></span><span style="height:62%; width:5px; background:#27ce73;"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Two-Level Top Bar</h3>
+      <p>Cleaner and more spacious: window controls stay at the top, search/explore controls get a second row. Better for large main windows.</p>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="recommendation" onclick="toggleSelect(this)">
+    <div class="letter">→</div>
+    <div class="content">
+      <h3>Recommendation</h3>
+      <p>Use the Two-Level Top Bar for the large main window, then transition close/minimize into a compact mini-player window. Keep Command Top Bar as a dense alternative if you prefer everything in one row.</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,125 @@
+<h2>Redesigned Main Window</h2>
+<p class="subtitle">Three selectable player modes inside one redesigned shell. The YouTube Music view remains the main content; native controls live above and around it.</p>
+
+<div class="cards">
+  <div class="card" data-choice="immersive" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0c0c0c; color:#f5f5f5; border-radius:8px; min-height:360px; overflow:hidden; border:1px solid #252525;">
+        <div style="height:36px; background:#070707; display:grid; grid-template-columns:auto 1fr auto; align-items:center; padding:0 10px; border-bottom:1px solid #202020;">
+          <div style="display:flex; align-items:center; gap:8px; color:#cfcfcf; font-size:12px;">
+            <div style="width:15px; height:15px; border-radius:3px; background:#d72b2b;"></div>
+            <span>YouTube Music Desktop</span>
+          </div>
+          <div style="justify-self:center; display:flex; gap:6px;">
+            <div style="height:24px; width:68px; border-radius:6px; background:#242424; display:grid; place-items:center; color:#ddd; font-size:11px;">Compact</div>
+            <div style="height:24px; width:76px; border-radius:6px; background:#d72b2b; display:grid; place-items:center; font-size:11px;">Expanded</div>
+            <div style="height:24px; width:70px; border-radius:6px; background:#242424; display:grid; place-items:center; color:#ddd; font-size:11px;">Console</div>
+          </div>
+          <div style="display:flex; gap:5px; justify-self:end;">
+            <div style="width:28px; height:28px; border-radius:5px; background:#1b1b1b; display:grid; place-items:center;">⌂</div>
+            <div style="width:28px; height:28px; border-radius:5px; background:#1b1b1b; display:grid; place-items:center;">⚙</div>
+            <div style="width:40px; height:28px; display:grid; place-items:center;">−</div>
+            <div style="width:40px; height:28px; display:grid; place-items:center;">□</div>
+            <div style="width:40px; height:28px; display:grid; place-items:center;">×</div>
+          </div>
+        </div>
+        <div style="height:244px; background:#111; position:relative;">
+          <div style="position:absolute; inset:0; display:grid; grid-template-columns:190px 1fr; color:#777; font-size:12px;">
+            <div style="background:#0f0f0f; border-right:1px solid #222; padding:14px; display:grid; gap:10px; align-content:start;">
+              <div style="height:20px; width:86px; background:#292929; border-radius:4px;"></div>
+              <div style="height:16px; width:120px; background:#222; border-radius:4px;"></div>
+              <div style="height:16px; width:105px; background:#222; border-radius:4px;"></div>
+              <div style="height:16px; width:132px; background:#222; border-radius:4px;"></div>
+            </div>
+            <div style="padding:18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start;">
+              <div style="height:92px; background:#1c1c1c; border-radius:7px;"></div>
+              <div style="height:92px; background:#1c1c1c; border-radius:7px;"></div>
+              <div style="height:92px; background:#1c1c1c; border-radius:7px;"></div>
+              <div style="height:92px; background:#1c1c1c; border-radius:7px;"></div>
+              <div style="height:92px; background:#1c1c1c; border-radius:7px;"></div>
+              <div style="height:92px; background:#1c1c1c; border-radius:7px;"></div>
+            </div>
+          </div>
+          <div style="position:absolute; left:16px; right:16px; bottom:14px; border:1px solid #303030; background:rgba(16,16,16,.95); border-radius:8px; padding:12px; display:grid; grid-template-columns:88px 1fr 80px; gap:13px; align-items:center; box-shadow:0 18px 38px rgba(0,0,0,.45);">
+            <div style="width:88px; height:88px; border-radius:7px; background:linear-gradient(135deg,#b51d2d,#181818);"></div>
+            <div style="display:grid; gap:10px; min-width:0;">
+              <div>
+                <div style="font-size:18px; font-weight:800;">Midnight City</div>
+                <div style="font-size:12px; color:#aaa;">M83 • Hurry Up, We're Dreaming</div>
+              </div>
+              <div style="height:7px; border-radius:99px; background:#303030; overflow:hidden;"><div style="width:42%; height:100%; background:#d72b2b;"></div></div>
+              <div style="display:flex; justify-content:center; align-items:center; gap:10px;">
+                <div style="width:36px; height:36px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏮</div>
+                <div style="width:52px; height:52px; border-radius:50%; background:#d72b2b; display:grid; place-items:center; font-size:26px;">▶</div>
+                <div style="width:36px; height:36px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏭</div>
+              </div>
+            </div>
+            <div style="height:86px; display:flex; align-items:end; justify-content:end; gap:4px;">
+              <span style="height:28%; width:7px; background:#27ce73; border-radius:3px;"></span>
+              <span style="height:54%; width:7px; background:#27ce73; border-radius:3px;"></span>
+              <span style="height:83%; width:7px; background:#f3c34c; border-radius:3px;"></span>
+              <span style="height:66%; width:7px; background:#27ce73; border-radius:3px;"></span>
+              <span style="height:42%; width:7px; background:#27ce73; border-radius:3px;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Immersive Shell</h3>
+      <p>Best daily-driver design: cleaner title bar, mode switcher, YouTube Music content remains central, selected player floats as a bottom overlay.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="workbench" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#0c0c0c; color:#f5f5f5; border-radius:8px; min-height:360px; overflow:hidden; border:1px solid #252525;">
+        <div style="height:36px; background:#070707; display:flex; align-items:center; justify-content:space-between; padding:0 10px; border-bottom:1px solid #202020;">
+          <div style="font-size:12px; display:flex; gap:8px; align-items:center;"><div style="width:15px; height:15px; background:#d72b2b; border-radius:3px;"></div>YTM Desktop</div>
+          <div style="display:flex; gap:5px;"><div style="width:28px; height:28px; background:#1b1b1b; border-radius:5px;"></div><div style="width:28px; height:28px; background:#1b1b1b; border-radius:5px;"></div><div style="width:40px; height:28px;"></div><div style="width:40px; height:28px;"></div><div style="width:40px; height:28px;"></div></div>
+        </div>
+        <div style="height:324px; display:grid; grid-template-columns:260px 1fr;">
+          <div style="background:#121212; border-right:1px solid #282828; padding:14px; display:grid; grid-template-rows:auto auto 1fr; gap:12px;">
+            <div style="font-size:12px; color:#aaa;">Player Mode</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px;">
+              <div style="height:27px; border-radius:6px; background:#242424; display:grid; place-items:center; font-size:10px;">Dock</div>
+              <div style="height:27px; border-radius:6px; background:#d72b2b; display:grid; place-items:center; font-size:10px;">Strip</div>
+              <div style="height:27px; border-radius:6px; background:#242424; display:grid; place-items:center; font-size:10px;">Console</div>
+            </div>
+            <div style="border:1px solid #303030; border-radius:8px; padding:12px; display:grid; gap:10px; align-content:start;">
+              <div style="width:116px; height:116px; border-radius:7px; background:linear-gradient(135deg,#b51d2d,#181818);"></div>
+              <div><div style="font-size:16px; font-weight:800;">Midnight City</div><div style="font-size:12px; color:#aaa;">M83</div></div>
+              <div style="height:7px; background:#303030; border-radius:99px;"><div style="width:42%; height:100%; background:#d72b2b;"></div></div>
+              <div style="display:flex; align-items:center; justify-content:center; gap:9px;">
+                <div style="width:34px; height:34px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏮</div>
+                <div style="width:48px; height:48px; border-radius:50%; background:#d72b2b; display:grid; place-items:center; font-size:24px;">▶</div>
+                <div style="width:34px; height:34px; border-radius:50%; background:#242424; display:grid; place-items:center;">⏭</div>
+              </div>
+              <div style="height:64px; display:flex; align-items:end; justify-content:center; gap:4px;">
+                <span style="height:31%; width:8px; background:#27ce73;"></span><span style="height:56%; width:8px; background:#27ce73;"></span><span style="height:82%; width:8px; background:#f3c34c;"></span><span style="height:61%; width:8px; background:#27ce73;"></span>
+              </div>
+            </div>
+          </div>
+          <div style="background:#111; padding:18px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-content:start;">
+            <div style="height:95px; background:#1c1c1c; border-radius:7px;"></div><div style="height:95px; background:#1c1c1c; border-radius:7px;"></div><div style="height:95px; background:#1c1c1c; border-radius:7px;"></div>
+            <div style="height:95px; background:#1c1c1c; border-radius:7px;"></div><div style="height:95px; background:#1c1c1c; border-radius:7px;"></div><div style="height:95px; background:#1c1c1c; border-radius:7px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Side Workbench</h3>
+      <p>Good if you want native controls always visible, but it permanently reduces the YouTube Music content area.</p>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="recommended" onclick="toggleSelect(this)">
+    <div class="letter">→</div>
+    <div class="content">
+      <h3>Recommended</h3>
+      <p>Use Immersive Shell as the main redesign. It supports all three selectable player modes while preserving the existing YouTube Music BrowserView.</p>
+    </div>
+  </div>
+</div>
