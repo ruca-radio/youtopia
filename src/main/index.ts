@@ -26,7 +26,7 @@ import electronSquirrelStartup from "electron-squirrel-startup";
 
 import MemoryStore from "./memory-store";
 import playerStateStore, { PlayerState, VideoState } from "./player-state-store";
-import { MemoryStoreSchema, StoreSchema, TrayIconStyle } from "../shared/store/schema";
+import { CloseAction, MemoryStoreSchema, MinimizeAction, PlayerLayout, StoreSchema, TopBarLayout, TrayIconStyle } from "../shared/store/schema";
 
 import CompanionServer from "./integrations/companion-server";
 import CustomCSS from "./integrations/custom-css";
@@ -332,6 +332,57 @@ function anyShortcutChanged(newState: Readonly<StoreSchema>, oldState: Readonly<
   return false;
 }
 
+function getMainShellMetrics() {
+  const topBarHeight = store.get("appearance.topBarLayout") === TopBarLayout.Command ? 44 : 96;
+  let playerHeight = 112;
+
+  switch (store.get("appearance.playerLayout")) {
+    case PlayerLayout.CompactDock: {
+      playerHeight = 104;
+      break;
+    }
+
+    case PlayerLayout.ControlConsole: {
+      playerHeight = 176;
+      break;
+    }
+
+    case PlayerLayout.ExpandedStrip:
+    default: {
+      playerHeight = 148;
+      break;
+    }
+  }
+
+  return {
+    topBarHeight,
+    playerHeight
+  };
+}
+
+function setYTMViewBounds() {
+  if (!mainWindow || !ytmView) return;
+
+  if (mainWindow.fullScreen) {
+    ytmView.setBounds({
+      x: 0,
+      y: 0,
+      width: mainWindow.getContentBounds().width,
+      height: mainWindow.getContentBounds().height
+    });
+    return;
+  }
+
+  const { topBarHeight, playerHeight } = getMainShellMetrics();
+  const contentBounds = mainWindow.getContentBounds();
+  ytmView.setBounds({
+    x: 0,
+    y: topBarHeight,
+    width: contentBounds.width,
+    height: Math.max(0, contentBounds.height - topBarHeight - playerHeight)
+  });
+}
+
 // Create the persistent config store
 const store = new Conf<StoreSchema>({
   configName: "config",
@@ -343,8 +394,10 @@ const store = new Conf<StoreSchema>({
       version: 1
     },
     general: {
+      closeAction: CloseAction.MiniPlayer,
       disableHardwareAcceleration: false,
       hideToTrayOnClose: false,
+      minimizeAction: MinimizeAction.MiniPlayer,
       showNotificationOnSongChange: false,
       startOnBoot: false,
       startMinimized: false
@@ -353,6 +406,9 @@ const store = new Conf<StoreSchema>({
       alwaysShowVolumeSlider: false,
       customCSSEnabled: false,
       customCSSPath: null,
+      playerLayout: PlayerLayout.ExpandedStrip,
+      topBarLayout: TopBarLayout.TwoLevel,
+      vuMeterEnabled: true,
       zoom: 100,
       trayIconStyle: TrayIconStyle.Auto
     },
@@ -426,6 +482,10 @@ const store = new Conf<StoreSchema>({
   }
 });
 store.onDidAnyChange(async (newState, oldState) => {
+  if (mainWindow !== null) {
+    mainWindow.webContents.send("settings:stateChanged", newState, oldState);
+  }
+
   if (settingsWindow !== null) {
     settingsWindow.webContents.send("settings:stateChanged", newState, oldState);
   }
@@ -469,6 +529,9 @@ store.onDidAnyChange(async (newState, oldState) => {
     log.info("Integration disabled: Custom CSS");
   }
   if (oldState.appearance.trayIconStyle !== newState.appearance.trayIconStyle) setTrayIcon();
+  if (oldState.appearance.topBarLayout !== newState.appearance.topBarLayout || oldState.appearance.playerLayout !== newState.appearance.playerLayout) {
+    setYTMViewBounds();
+  }
 
   // Playback
   if (newState.playback.ratioVolume) {
@@ -1237,23 +1300,7 @@ const createMainWindow = (): void => {
   // Attach events to main window
   mainWindow.on("resize", () => {
     setTimeout(() => {
-      if (ytmView) {
-        if (mainWindow.fullScreen) {
-          ytmView.setBounds({
-            x: 0,
-            y: 0,
-            width: mainWindow.getContentBounds().width,
-            height: mainWindow.getContentBounds().height
-          });
-        } else {
-          ytmView.setBounds({
-            x: 0,
-            y: 36,
-            width: mainWindow.getContentBounds().width,
-            height: mainWindow.getContentBounds().height - 36
-          });
-        }
-      }
+      setYTMViewBounds();
     });
   });
 
@@ -1272,12 +1319,7 @@ const createMainWindow = (): void => {
   });
   mainWindow.on("leave-full-screen", () => {
     setTimeout(() => {
-      ytmView.setBounds({
-        x: 0,
-        y: 36,
-        width: mainWindow.getContentBounds().width,
-        height: mainWindow.getContentBounds().height - 36
-      });
+      setYTMViewBounds();
     });
     sendMainWindowStateIpc();
   });
@@ -1522,6 +1564,29 @@ app.on("ready", async () => {
     sendMainWindowStateIpc();
   });
 
+  ipcMain.on("playerControl:execute", (event, command: string) => {
+    if (event.sender !== mainWindow.webContents) return;
+    if (!ytmView) return;
+
+    const allowedCommands = new Set(["playPause", "previous", "next", "toggleLike", "toggleDislike", "volumeUp", "volumeDown"]);
+    if (!allowedCommands.has(command)) return;
+
+    ytmView.webContents.send("remoteControl:execute", command);
+  });
+
+  ipcMain.on("mainWindow:openMiniPlayer", event => {
+    if (event.sender !== mainWindow.webContents) return;
+
+    log.info("Mini-player requested from main shell");
+  });
+
+  ipcMain.on("ytmView:focusSearch", event => {
+    if (event.sender !== mainWindow.webContents) return;
+    if (!ytmView) return;
+
+    ytmView.webContents.focus();
+  });
+
   // Handle settings window ipc
   ipcMain.on("settingsWindow:open", event => {
     if (event.sender !== mainWindow.webContents) return;
@@ -1576,12 +1641,7 @@ app.on("ready", async () => {
       memoryStore.set("ytmViewLoading", false);
       clearTimeout(ytmViewLoadTimeout);
       mainWindow.addBrowserView(ytmView);
-      ytmView.setBounds({
-        x: 0,
-        y: 36,
-        width: mainWindow.getContentBounds().width,
-        height: mainWindow.getContentBounds().height - 36
-      });
+      setYTMViewBounds();
       if (process.env.NODE_ENV === "development") {
         ytmView.webContents.openDevTools({
           mode: "detach"

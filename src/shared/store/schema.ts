@@ -4,13 +4,37 @@ export enum TrayIconStyle {
   Black = 2
 }
 
+export enum TopBarLayout {
+  Command = 0,
+  TwoLevel = 1
+}
+
+export enum PlayerLayout {
+  CompactDock = 0,
+  ExpandedStrip = 1,
+  ControlConsole = 2
+}
+
+export enum CloseAction {
+  MiniPlayer = 0,
+  Tray = 1,
+  Quit = 2
+}
+
+export enum MinimizeAction {
+  MiniPlayer = 0,
+  Taskbar = 1
+}
+
 export type StoreSchema = {
   metadata: {
     version: 1;
   };
   general: {
+    closeAction: CloseAction;
     disableHardwareAcceleration: boolean;
     hideToTrayOnClose: boolean;
+    minimizeAction: MinimizeAction;
     showNotificationOnSongChange: boolean;
     startOnBoot: boolean;
     startMinimized: boolean;
@@ -19,6 +43,9 @@ export type StoreSchema = {
     alwaysShowVolumeSlider: boolean;
     customCSSEnabled: boolean;
     customCSSPath: string | null;
+    playerLayout: PlayerLayout;
+    topBarLayout: TopBarLayout;
+    vuMeterEnabled: boolean;
     zoom: number;
     trayIconStyle: TrayIconStyle;
   };

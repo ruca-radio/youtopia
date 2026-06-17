@@ -28,6 +28,9 @@ declare global {
 
       // Main window specific
       switchFocus(context: "main" | "ytm"): void;
+      playerControl(command: "playPause" | "previous" | "next" | "toggleLike" | "toggleDislike" | "volumeUp" | "volumeDown"): void;
+      openMiniPlayer(): void;
+      focusSearch(): void;
 
       // YTM view specific
       ytmViewNavigateDefault(): void;

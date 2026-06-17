@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
-import { StoreSchema, TrayIconStyle } from "~shared/store/schema";
+import { CloseAction, MinimizeAction, PlayerLayout, StoreSchema, TopBarLayout, TrayIconStyle } from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
 import logo from "~assets/icons/ytmd.png";
 
@@ -37,7 +37,9 @@ const shortcuts: StoreSchema["shortcuts"] = await store.get("shortcuts");
 const lastFM: StoreSchema["lastfm"] = await store.get("lastfm");
 
 const disableHardwareAcceleration = ref<boolean>(general.disableHardwareAcceleration);
+const closeAction = ref<number>(general.closeAction);
 const hideToTrayOnClose = ref<boolean>(general.hideToTrayOnClose);
+const minimizeAction = ref<number>(general.minimizeAction);
 const showNotificationOnSongChange = ref<boolean>(general.showNotificationOnSongChange);
 const startOnBoot = ref<boolean>(general.startOnBoot);
 const startMinimized = ref<boolean>(general.startMinimized);
@@ -45,6 +47,9 @@ const startMinimized = ref<boolean>(general.startMinimized);
 const alwaysShowVolumeSlider = ref<boolean>(appearance.alwaysShowVolumeSlider);
 const customCSSEnabled = ref<boolean>(appearance.customCSSEnabled);
 const customCSSPath = ref<string>(appearance.customCSSPath);
+const playerLayout = ref<number>(appearance.playerLayout);
+const topBarLayout = ref<number>(appearance.topBarLayout);
+const vuMeterEnabled = ref<boolean>(appearance.vuMeterEnabled);
 const zoom = ref<number>(appearance.zoom);
 const trayIconStyle = ref<number>(appearance.trayIconStyle);
 
@@ -75,7 +80,9 @@ const scrobblePercent = ref<number>(lastFM.scrobblePercent);
 
 store.onDidAnyChange(async newState => {
   disableHardwareAcceleration.value = newState.general.disableHardwareAcceleration;
+  closeAction.value = newState.general.closeAction;
   hideToTrayOnClose.value = newState.general.hideToTrayOnClose;
+  minimizeAction.value = newState.general.minimizeAction;
   showNotificationOnSongChange.value = newState.general.showNotificationOnSongChange;
   startOnBoot.value = newState.general.startOnBoot;
   startMinimized.value = newState.general.startMinimized;
@@ -83,6 +90,9 @@ store.onDidAnyChange(async newState => {
   alwaysShowVolumeSlider.value = newState.appearance.alwaysShowVolumeSlider;
   customCSSEnabled.value = newState.appearance.customCSSEnabled;
   customCSSPath.value = newState.appearance.customCSSPath;
+  playerLayout.value = newState.appearance.playerLayout;
+  topBarLayout.value = newState.appearance.topBarLayout;
+  vuMeterEnabled.value = newState.appearance.vuMeterEnabled;
   zoom.value = newState.appearance.zoom;
   trayIconStyle.value = newState.appearance.trayIconStyle;
 
@@ -148,7 +158,9 @@ async function memorySettingsChanged() {
 }
 
 async function settingsChanged() {
+  store.set("general.closeAction", closeAction.value);
   store.set("general.hideToTrayOnClose", hideToTrayOnClose.value);
+  store.set("general.minimizeAction", minimizeAction.value);
   store.set("general.showNotificationOnSongChange", showNotificationOnSongChange.value);
   store.set("general.startOnBoot", startOnBoot.value);
   store.set("general.startMinimized", startMinimized.value);
@@ -156,6 +168,9 @@ async function settingsChanged() {
 
   store.set("appearance.alwaysShowVolumeSlider", alwaysShowVolumeSlider.value);
   store.set("appearance.customCSSEnabled", customCSSEnabled.value);
+  store.set("appearance.playerLayout", playerLayout.value);
+  store.set("appearance.topBarLayout", topBarLayout.value);
+  store.set("appearance.vuMeterEnabled", vuMeterEnabled.value);
   store.set("appearance.zoom", zoom.value);
   store.set("appearance.trayIconStyle", trayIconStyle.value);
 
@@ -285,6 +300,22 @@ window.ytmd.handleUpdateDownloaded(() => {
           <button class="restart-button" @click="restartApplication">Restart</button>
         </div>
         <div v-if="currentTab === 1" class="general-tab">
+          <YTMDSetting
+            v-model="closeAction"
+            :options-map="{ [CloseAction.MiniPlayer]: 'Mini-player', [CloseAction.Tray]: 'Tray', [CloseAction.Quit]: 'Quit' }"
+            type="select"
+            name="Close action"
+            description="Choose what happens when the main window is closed"
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-model="minimizeAction"
+            :options-map="{ [MinimizeAction.MiniPlayer]: 'Mini-player', [MinimizeAction.Taskbar]: 'Taskbar' }"
+            type="select"
+            name="Minimize action"
+            description="Choose what happens when the main window is minimized"
+            @change="settingsChanged"
+          />
           <YTMDSetting v-if="!isDarwin" v-model="hideToTrayOnClose" type="checkbox" name="Hide to tray on close" @change="settingsChanged" />
           <YTMDSetting v-model="showNotificationOnSongChange" type="checkbox" name="Show notification on song change" @change="settingsChanged" />
           <YTMDSetting v-model="startOnBoot" type="checkbox" name="Start on boot" @change="settingsChanged" />
@@ -302,6 +333,33 @@ window.ytmd.handleUpdateDownloaded(() => {
         </div>
 
         <div v-if="currentTab === 2" class="appearance-tab">
+          <YTMDSetting
+            v-model="topBarLayout"
+            :options-map="{ [TopBarLayout.Command]: 'Command', [TopBarLayout.TwoLevel]: 'Two-Level' }"
+            type="select"
+            name="Top bar layout"
+            description="Choose between a dense icon bar and a larger two-level workspace bar"
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-model="playerLayout"
+            :options-map="{
+              [PlayerLayout.CompactDock]: 'Compact Dock',
+              [PlayerLayout.ExpandedStrip]: 'Expanded Strip',
+              [PlayerLayout.ControlConsole]: 'Control Console'
+            }"
+            type="select"
+            name="Player layout"
+            description="Choose the native player surface shown around YouTube Music"
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-model="vuMeterEnabled"
+            type="checkbox"
+            name="VU meter"
+            description="Show native meter animation in player controls"
+            @change="settingsChanged"
+          />
           <YTMDSetting v-model="alwaysShowVolumeSlider" type="checkbox" name="Always show volume slider" @change="settingsChanged" />
           <YTMDSetting v-model="customCSSEnabled" type="checkbox" name="Custom CSS" @change="settingsChanged" />
           <YTMDSetting

@@ -3,10 +3,12 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 import { WindowsEventArguments } from "~shared/types";
-import { MemoryStoreSchema } from "~shared/store/schema";
+import { MemoryStoreSchema, StoreSchema } from "~shared/store/schema";
 import MemoryStore from "../../store-ipc/memory-store";
+import Store from "../../store-ipc/store";
 
 const memoryStore = new MemoryStore<MemoryStoreSchema>();
+const store = new Store<StoreSchema>();
 
 contextBridge.exposeInMainWorld("ytmd", {
   minimizeWindow: () => ipcRenderer.send("mainWindow:minimize"),
@@ -20,6 +22,15 @@ contextBridge.exposeInMainWorld("ytmd", {
   switchFocus: (context: string) => ipcRenderer.send("ytmView:switchFocus", context),
   ytmViewNavigateDefault: () => ipcRenderer.send("ytmView:navigateDefault"),
   ytmViewRecreate: () => ipcRenderer.send("ytmView:recreate"),
+  playerControl: (command: string) => ipcRenderer.send("playerControl:execute", command),
+  openMiniPlayer: () => ipcRenderer.send("mainWindow:openMiniPlayer"),
+  focusSearch: () => ipcRenderer.send("ytmView:focusSearch"),
+  store: {
+    set: (key: string, value: unknown) => store.set(key, value),
+    get: async (key: keyof StoreSchema) => await store.get(key),
+    reset: (key: keyof StoreSchema) => store.reset(key),
+    onDidAnyChange: (callback: (newState: StoreSchema, oldState: StoreSchema) => void) => store.onDidAnyChange(callback)
+  },
   memoryStore: {
     set: (key: string, value: unknown) => memoryStore.set(key, value),
     get: async (key: keyof MemoryStoreSchema) => await memoryStore.get(key),
