@@ -18,7 +18,7 @@ for (let i = 0; i < process.argv.length; i++) {
 
 const config: ForgeConfig = {
   packagerConfig: {
-    executableName: "youtube-music-desktop-app",
+    executableName: "youtopia",
     icon: "./src/assets/icons/ytmd",
     extraResource: [
       "./src/assets/icons/tray.ico",
@@ -35,7 +35,7 @@ const config: ForgeConfig = {
     ],
     protocols: [
       {
-        name: "YouTube Music Desktop App",
+        name: "Youtopia",
         schemes: ["ytmd"]
       }
     ],
@@ -45,7 +45,7 @@ const config: ForgeConfig = {
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      iconUrl: `https://raw.githubusercontent.com/${process.env.YTMD_UPDATE_FEED_OWNER ?? "ytmdesktop"}/ytmdesktop/137c4e5c175c8c125cbcca9a5312611f80cd3bd9/src/assets/icons/ytmd.ico`
+      iconUrl: `https://raw.githubusercontent.com/${process.env.YTMD_UPDATE_FEED_OWNER ?? "ruca-radio"}/${process.env.YTMD_UPDATE_FEED_REPOSITORY ?? "youtopia"}/137c4e5c175c8c125cbcca9a5312611f80cd3bd9/src/assets/icons/ytmd.ico`
     }),
     new MakerZIP({}, ["darwin"]),
     new MakerRpm({
@@ -69,8 +69,8 @@ const config: ForgeConfig = {
       name: "@electron-forge/publisher-github",
       config: {
         repository: {
-          owner: process.env.YTMD_UPDATE_FEED_OWNER ?? "ytmdesktop",
-          name: process.env.YTMD_UPDATE_FEED_REPOSITORY ?? "ytmdesktop"
+          owner: process.env.YTMD_UPDATE_FEED_OWNER ?? "ruca-radio",
+          name: process.env.YTMD_UPDATE_FEED_REPOSITORY ?? "youtopia"
         }
       }
     }

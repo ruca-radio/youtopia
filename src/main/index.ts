@@ -113,7 +113,7 @@ log.errorHandler.startCatching({
       `${error.stack}`;
 
     if (!app.isReady()) {
-      dialog.showErrorBox(`YouTube Music Desktop App Crashed`, `Application crashed before ready\n\n${dialogMessage}`);
+      dialog.showErrorBox(`Youtopia Crashed`, `Application crashed before ready\n\n${dialogMessage}`);
     } else {
       const options = ["Copy to Clipboard and Exit", "Exit"];
       if (!app.isPackaged) {
@@ -122,7 +122,7 @@ log.errorHandler.startCatching({
 
       result = dialog.showMessageBoxSync({
         title: "Error",
-        message: "YouTube Music Desktop App Crashed",
+        message: "Youtopia Crashed",
         detail: dialogMessage,
         type: "error",
         buttons: options
@@ -130,7 +130,7 @@ log.errorHandler.startCatching({
 
       // Copy to Clipboard
       if (result === 0 || result === 2) {
-        clipboard.writeText(`YouTube Music Desktop App Crashed\n\n${dialogMessage}`);
+        clipboard.writeText(`Youtopia Crashed\n\n${dialogMessage}`);
       }
     }
 
@@ -157,7 +157,7 @@ log.info("Application launched");
 app.enableSandbox();
 
 // appMenu allows for some basic windows management, editMenu allow for copy and paste shortcuts on MacOS
-const template: MenuItemConstructorOptions[] = [{ role: "appMenu", label: "YouTube Music Desktop App" }, { role: "editMenu" }];
+const template: MenuItemConstructorOptions[] = [{ role: "appMenu", label: "Youtopia" }, { role: "editMenu" }];
 const builtMenu = isDarwin ? Menu.buildFromTemplate(template) : null; // null for performance https://www.electronjs.org/docs/latest/tutorial/performance#8-call-menusetapplicationmenunull-when-you-do-not-need-a-default-menu
 Menu.setApplicationMenu(builtMenu);
 
@@ -965,7 +965,7 @@ const createOrShowSettingsWindow = (): void => {
   });
 
   settingsWindow.webContents.setWindowOpenHandler(details => {
-    if (details.url === "https://github.com/ytmdesktop/ytmdesktop" || details.url === "https://ytmdesktop.github.io/") {
+    if (details.url === "https://github.com/ruca-radio/youtopia") {
       shell.openExternal(details.url);
     }
 
@@ -1083,14 +1083,14 @@ const createYTMView = (): void => {
   });
   ytmView.webContents.on("page-title-updated", (_event, title) => {
     if (mainWindow) {
-      mainWindow.setTitle(`${title} | YouTube Music Desktop App`);
+      mainWindow.setTitle(`${title} | Youtopia`);
     }
   });
   ytmView.webContents.on("context-menu", (_event, params) => {
     if (store.get("developer.enableDevTools")) {
       Menu.buildFromTemplate([
         {
-          label: "YouTube Music Desktop",
+          label: "Youtopia",
           type: "normal",
           enabled: false
         },
@@ -1348,7 +1348,7 @@ app.on("ready", async () => {
         type: "question",
         message: "Would you like to migrate your settings?",
         detail:
-          "A configuration file for YouTube Music Desktop App v1 was found. Your settings can be migrated.\n\nWARNING: Not all settings will be migrated as they may no longer be available in v2.",
+          "A configuration file for YouTube Music Desktop App v1 was found. Your settings can be migrated into Youtopia.\n\nWARNING: Not all settings will be migrated as they may no longer be available in v2.",
         buttons: ["No", "Migrate Settings"]
       });
 
@@ -1806,7 +1806,7 @@ app.on("ready", async () => {
   tray = new Tray(getTrayIconPath());
   trayContextMenu = Menu.buildFromTemplate([
     {
-      label: "YouTube Music Desktop",
+      label: "Youtopia",
       type: "normal",
       enabled: false
     },
@@ -1858,7 +1858,7 @@ app.on("ready", async () => {
       }
     }
   ]);
-  tray.setToolTip("YouTube Music Desktop");
+  tray.setToolTip("Youtopia");
   tray.setContextMenu(trayContextMenu);
   tray.on("click", () => {
     if (mainWindow) {
