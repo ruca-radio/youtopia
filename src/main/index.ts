@@ -602,8 +602,43 @@ const store = new Conf<StoreSchema>({
       lightssOpenRouterApiKey: null,
       lightssOllamaBaseUrl: "http://10.27.27.10:11434",
       lightssOllamaModel: "kimi-k2.7-code:cloud",
+      lightssGeminiApiKey: null,
+      lightssGeminiModel: "gemini-2.5-flash",
+      lightssGeminiBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
+      lightssLyriaEnabled: false,
+      lightssLyriaPrompt:
+        "Create a premium, late-night lo-fi jazz or synthwave jingle with smooth, warm chords and subtle vinyl crackle that blends perfectly into the background.",
+      lightssDjVoiceEnabled: false,
+      lightssDjVoiceModel: "en-US-Journey-F",
+      lightssDjVoicePrompt:
+        "You are a sophisticated, late-night AI radio DJ. Keep your introductions extremely smooth, brief, and set against a dark ambient background.",
+      lightssWledProvider: LightssAiProvider.Ollama,
+      lightssWledModel: "kimi-k2.7-code:cloud",
+      lightssCanvasProvider: LightssAiProvider.Gemini,
+      lightssCanvasModel: "gemini-2.5-flash",
+      lightssHostProvider: LightssAiProvider.Gemini,
+      lightssHostModel: "gemini-2.5-flash",
+      lightssAnalystProvider: LightssAiProvider.Gemini,
+      lightssAnalystModel: "gemini-2.5-flash",
+      lightssAnalystPrompt:
+        "You are the Music Analyst and Visual Coordinator Agent.\nYour role is to analyze the song title, artist, and musical metadata to establish a cohesive visual direction.\nDetermine the exact genre, emotional mood, and a rich, creative visual concept that will guide the lighting and screen visualizer.\nKeep themes elegant, premium, and true to the track's emotional core.\nReturn JSON matching the schema precisely.",
+      lightssSketchProvider: LightssAiProvider.Gemini,
+      lightssSketchModel: "gemini-2.5-flash",
+      lightssVisionEnabled: true,
+      lightssStepIntervalMs: 1000,
       lightssBridgePath: null,
-      lightssPythonPath: null
+      lightssPythonPath: null,
+      lightssWledPrompt:
+        "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.\nReturn JSON matching the schema precisely.\nRules: No strobe, blinking, or sudden flashing.\nAlways soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.\nGenerate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).\nUse only safe effect and palette IDs.\nAvoid mid-song jumps; morph colors gradually.",
+      lightssCanvasPrompt:
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely.",
+      lightssHostPrompt:
+        "You are the late-night VJ and Scrolling Ticker Agent.\nGenerate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.\nWrite one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.\nWrite a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.\nReturn JSON matching the schema precisely.",
+      audioCompressorEnabled: true,
+      audioCompressorThreshold: -24,
+      audioCompressorRatio: 12,
+      audioCompressorAttack: 0.003,
+      audioCompressorRelease: 0.25
     },
     shortcuts: {
       playPause: "",
@@ -700,11 +735,104 @@ const store = new Conf<StoreSchema>({
       if (!store.has("integrations.lightssOllamaModel")) {
         store.set("integrations.lightssOllamaModel", "kimi-k2.7-code:cloud");
       }
+      if (!store.has("integrations.lightssGeminiApiKey")) {
+        store.set("integrations.lightssGeminiApiKey", null);
+      }
+      if (!store.has("integrations.lightssGeminiModel")) {
+        store.set("integrations.lightssGeminiModel", "gemini-2.5-flash");
+      }
+      if (!store.has("integrations.lightssGeminiBaseUrl")) {
+        store.set("integrations.lightssGeminiBaseUrl", "https://generativelanguage.googleapis.com/v1beta");
+      }
+      if (!store.has("integrations.lightssLyriaEnabled")) {
+        store.set("integrations.lightssLyriaEnabled", false);
+      }
+      if (!store.has("integrations.lightssLyriaPrompt")) {
+        store.set(
+          "integrations.lightssLyriaPrompt",
+          "Create a premium, late-night lo-fi jazz or synthwave jingle with smooth, warm chords and subtle vinyl crackle that blends perfectly into the background."
+        );
+      }
+      if (!store.has("integrations.lightssDjVoiceEnabled")) {
+        store.set("integrations.lightssDjVoiceEnabled", false);
+      }
+      if (!store.has("integrations.lightssDjVoiceModel")) {
+        store.set("integrations.lightssDjVoiceModel", "en-US-Journey-F");
+      }
+      if (!store.has("integrations.lightssDjVoicePrompt")) {
+        store.set(
+          "integrations.lightssDjVoicePrompt",
+          "You are a sophisticated, late-night AI radio DJ. Keep your introductions extremely smooth, brief, and set against a dark ambient background."
+        );
+      }
+      if (!store.has("integrations.lightssWledProvider")) {
+        store.set("integrations.lightssWledProvider", LightssAiProvider.Ollama);
+      }
+      if (!store.has("integrations.lightssWledModel")) {
+        store.set("integrations.lightssWledModel", "kimi-k2.7-code:cloud");
+      }
+      if (!store.has("integrations.lightssCanvasProvider")) {
+        store.set("integrations.lightssCanvasProvider", LightssAiProvider.Gemini);
+      }
+      if (!store.has("integrations.lightssCanvasModel")) {
+        store.set("integrations.lightssCanvasModel", "gemini-2.5-flash");
+      }
+      if (!store.has("integrations.lightssHostProvider")) {
+        store.set("integrations.lightssHostProvider", LightssAiProvider.Gemini);
+      }
+      if (!store.has("integrations.lightssHostModel")) {
+        store.set("integrations.lightssHostModel", "gemini-2.5-flash");
+      }
+      if (!store.has("integrations.lightssAnalystProvider")) {
+        store.set("integrations.lightssAnalystProvider", LightssAiProvider.Gemini);
+      }
+      if (!store.has("integrations.lightssAnalystModel")) {
+        store.set("integrations.lightssAnalystModel", "gemini-2.5-flash");
+      }
+      if (!store.has("integrations.lightssAnalystPrompt")) {
+        store.set(
+          "integrations.lightssAnalystPrompt",
+          "You are the Music Analyst and Visual Coordinator Agent.\nYour role is to analyze the song title, artist, and musical metadata to establish a cohesive visual direction.\nDetermine the exact genre, emotional mood, and a rich, creative visual concept that will guide the lighting and screen visualizer.\nKeep themes elegant, premium, and true to the track's emotional core.\nReturn JSON matching the schema precisely."
+        );
+      }
       if (!store.has("integrations.lightssBridgePath")) {
         store.set("integrations.lightssBridgePath", null);
       }
       if (!store.has("integrations.lightssPythonPath")) {
         store.set("integrations.lightssPythonPath", null);
+      }
+      if (!store.has("integrations.lightssWledPrompt")) {
+        store.set(
+          "integrations.lightssWledPrompt",
+          "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.\nReturn JSON matching the schema precisely.\nRules: No strobe, blinking, or sudden flashing.\nAlways soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.\nGenerate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).\nUse only safe effect and palette IDs.\nAvoid mid-song jumps; morph colors gradually."
+        );
+      }
+      if (!store.has("integrations.lightssCanvasPrompt")) {
+        store.set(
+          "integrations.lightssCanvasPrompt",
+          "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely."
+        );
+      }
+      if (!store.has("integrations.lightssHostPrompt")) {
+        store.set(
+          "integrations.lightssHostPrompt",
+          "You are the late-night VJ and Scrolling Ticker Agent.\nGenerate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.\nWrite one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.\nWrite a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.\nReturn JSON matching the schema precisely."
+        );
+      }
+      if (!store.has("integrations.audioCompressorEnabled")) {
+        store.set("integrations.audioCompressorEnabled", true);
+      }
+      if (!store.has("integrations.audioCompressorThreshold")) {
+        store.set("integrations.audioCompressorThreshold", -24);
+      }
+      if (!store.has("integrations.audioCompressorRatio")) {
+        store.set("integrations.audioCompressorRatio", 12);
+      }
+      if (!store.has("integrations.audioCompressorAttack")) {
+        store.set("integrations.audioCompressorAttack", 0.003);
+      }
+      if (!store.has("integrations.audioCompressorRelease")) {
+        store.set("integrations.audioCompressorRelease", 0.25);
       }
     }
   }
@@ -1951,6 +2079,10 @@ app.on("ready", async () => {
 
   ipcMain.on("ytmView:audioDataChanged", (event, frequencyData: number[]) => {
     if (event.sender !== ytmView.webContents) return;
+    const sum = frequencyData ? frequencyData.reduce((a, b) => a + b, 0) : 0;
+    if (Math.random() < 0.05) {
+      log.info(`[AudioDiag] Received audio data. Length: ${frequencyData ? frequencyData.length : 0}, Sum: ${sum}`);
+    }
     updateTvAudioData(frequencyData);
     if (mainWindow === null) return;
 

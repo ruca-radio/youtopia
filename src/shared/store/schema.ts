@@ -47,7 +47,8 @@ export enum VuMeterStyle {
 export enum LightssAiProvider {
   OpenAI = "openai",
   OpenRouter = "openrouter",
-  Ollama = "ollama"
+  Ollama = "ollama",
+  Gemini = "gemini"
 }
 
 export type StoreSchema = {
@@ -102,8 +103,37 @@ export type StoreSchema = {
     lightssOpenRouterApiKey: string | null;
     lightssOllamaBaseUrl: string;
     lightssOllamaModel: string;
+    lightssGeminiApiKey: string | null;
+    lightssGeminiModel: string;
+    lightssGeminiBaseUrl: string;
+    lightssLyriaEnabled: boolean;
+    lightssLyriaPrompt: string | null;
+    lightssDjVoiceEnabled: boolean;
+    lightssDjVoiceModel: string;
+    lightssDjVoicePrompt: string | null;
+    lightssWledProvider: LightssAiProvider;
+    lightssWledModel: string;
+    lightssCanvasProvider: LightssAiProvider;
+    lightssCanvasModel: string;
+    lightssHostProvider: LightssAiProvider;
+    lightssHostModel: string;
+    lightssAnalystProvider: LightssAiProvider;
+    lightssAnalystModel: string;
+    lightssAnalystPrompt: string | null;
+    lightssSketchProvider: LightssAiProvider;
+    lightssSketchModel: string;
+    lightssVisionEnabled: boolean;
+    lightssStepIntervalMs: number;
     lightssBridgePath: string | null;
     lightssPythonPath: string | null;
+    lightssWledPrompt: string | null;
+    lightssCanvasPrompt: string | null;
+    lightssHostPrompt: string | null;
+    audioCompressorEnabled: boolean;
+    audioCompressorThreshold: number;
+    audioCompressorRatio: number;
+    audioCompressorAttack: number;
+    audioCompressorRelease: number;
   };
   shortcuts: {
     playPause: string;

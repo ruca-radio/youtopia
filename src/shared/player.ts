@@ -66,5 +66,6 @@ export type RendererLightssAiMessage = {
   visualScene?: RendererLightssVisualScene;
   tickerMessage?: string;
   hostLine?: string;
+  planPhase?: "sketch" | "full";
   timestamp: number;
 };
