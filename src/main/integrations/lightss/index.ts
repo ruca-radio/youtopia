@@ -364,10 +364,11 @@ export default class LightssIntegration implements IIntegration {
     const wledProvider = this.getWledAiProvider();
     const canvasProvider = this.getCanvasAiProvider();
     const hostProvider = this.getHostAiProvider();
-    const analystProvider = this.getAnalystAiProvider();
+    const visionEnabled = Boolean(this.store.get("integrations.lightssVisionEnabled") ?? true);
+    const albumArtUrl = this.getBestThumbnailUrl(state.videoDetails?.thumbnails);
 
     log.info(
-      `Lightss: starting multi-agent planning with Analyst (${analystProvider.provider}/${analystProvider.model}), WLED (${wledProvider.provider}/${wledProvider.model}), Canvas (${canvasProvider.provider}/${canvasProvider.model}), Host (${hostProvider.provider}/${hostProvider.model})`
+      `Lightss: starting parallel planning — WLED (${wledProvider.provider}/${wledProvider.model}), Canvas (${canvasProvider.provider}/${canvasProvider.model}), Host (${hostProvider.provider}/${hostProvider.model})`
     );
 
     const context = await this.buildAiLightshowContext(state);
@@ -378,15 +379,7 @@ export default class LightssIntegration implements IIntegration {
       tvOutput: context.tvOutput
     });
 
-    const analystPrompt =
-      (this.store.get("integrations.lightssAnalystPrompt") as string | null) ||
-      [
-        "You are the Music Analyst and Visual Coordinator Agent.",
-        "Your role is to analyze the song title, artist, and musical metadata to establish a cohesive visual direction.",
-        "Determine the exact genre, emotional mood, and a rich, creative visual concept that will guide the lighting and screen visualizer.",
-        "Keep themes elegant, premium, and true to the track's emotional core.",
-        "Return JSON matching the schema precisely."
-      ].join("\n");
+    const analystPreamble = this.getAnalystPreamble();
 
     const wledSystemPromptFromStore =
       (this.store.get("integrations.lightssWledPrompt") as string | null) ||
@@ -400,11 +393,13 @@ export default class LightssIntegration implements IIntegration {
         "Avoid mid-song jumps; morph colors gradually."
       ].join("\n");
 
-    const wledSystemPrompt = wledSystemPromptFromStore.includes(SAFE_EFFECTS.join(","))
-      ? wledSystemPromptFromStore
-      : `${wledSystemPromptFromStore}\nUse only effect IDs from: ${SAFE_EFFECTS.join(",")} and palette IDs from: ${SAFE_PALETTES.join(",")}.`;
+    const wledSystemPrompt = `${analystPreamble}\n\n${
+      wledSystemPromptFromStore.includes(SAFE_EFFECTS.join(","))
+        ? wledSystemPromptFromStore
+        : `${wledSystemPromptFromStore}\nUse only effect IDs from: ${SAFE_EFFECTS.join(",")} and palette IDs from: ${SAFE_PALETTES.join(",")}.`
+    }`;
 
-    const canvasSystemPrompt =
+    const canvasSystemPrompt = `${analystPreamble}\n\n${
       (this.store.get("integrations.lightssCanvasPrompt") as string | null) ||
       [
         "You are the Screen Drawing and TV Canvas Agent for an agentic display.",
@@ -413,9 +408,10 @@ export default class LightssIntegration implements IIntegration {
         "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
         "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.",
         "Return JSON matching the schema precisely."
-      ].join("\n");
+      ].join("\n")
+    }`;
 
-    const hostSystemPrompt =
+    const hostSystemPrompt = `${analystPreamble}\n\n${
       (this.store.get("integrations.lightssHostPrompt") as string | null) ||
       [
         "You are the late-night VJ and Scrolling Ticker Agent.",
@@ -423,77 +419,47 @@ export default class LightssIntegration implements IIntegration {
         "Write one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.",
         "Write a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.",
         "Return JSON matching the schema precisely."
-      ].join("\n");
+      ].join("\n")
+    }`;
 
-    this.emitAiMessage("Music analysis", `Analyst agent (${analystProvider.provider}) is coordinating theme concept for ${context.song.title}...`, {
-      provider: analystProvider.provider,
-      model: analystProvider.model,
+    const wledImageUrl = visionEnabled && albumArtUrl && VISION_CAPABLE_PROVIDERS.includes(wledProvider.provider) ? albumArtUrl : undefined;
+    const canvasImageUrl = visionEnabled && albumArtUrl && VISION_CAPABLE_PROVIDERS.includes(canvasProvider.provider) ? albumArtUrl : undefined;
+    const hostImageUrl = visionEnabled && albumArtUrl && VISION_CAPABLE_PROVIDERS.includes(hostProvider.provider) ? albumArtUrl : undefined;
+
+    this.emitAiMessage("Full plan", `WLED, Canvas, and VJ agents running in parallel for "${context.song.title}"...`, {
       aiStatus: "planning",
-      lightStatus: "idle"
+      lightStatus: "idle",
+      planPhase: "full"
     });
 
     try {
-      // 1. Run the analyst query first to coordinate the show concept
-      const analystRes = await this.queryAgent<{ musicGenre: string; emotionalMood: string; visualConcept: string }>(
-        "Music Analyst Agent",
-        analystProvider,
-        analystPrompt,
-        userPrompt,
-        this.getAnalystAgentSchema(),
-        "music_analysis"
-      );
-
-      const analystData = analystRes || {
-        musicGenre: context.song.genre || "ambient",
-        emotionalMood: "chill",
-        visualConcept: "A cohesive, elegant aesthetic with smooth transitions."
-      };
-
-      // 2. Build the enriched prompt with coordinated concept
-      const enrichedUserPrompt = JSON.stringify({
-        song: {
-          ...context.song,
-          genre: analystData.musicGenre,
-          mood: analystData.emotionalMood
-        },
-        audioProfile: context.audioProfile,
-        roomLighting: context.roomLighting,
-        tvOutput: context.tvOutput,
-        coordinatorConcept: analystData.visualConcept
-      });
-
-      this.emitAiMessage("Collaborative planning", `WLED, Canvas, and VJ agents designing show built on concept: "${analystData.visualConcept}"`, {
-        provider: wledProvider.provider,
-        model: wledProvider.model,
-        aiStatus: "planning",
-        lightStatus: "idle"
-      });
-
-      // 3. Query the 3 specialized design agents in parallel
       const [wledRes, canvasRes, hostRes] = await Promise.all([
         this.queryAgent<{ genre: string; mood: string; bpm: number; rationale: string; steps: AiLightshowStep[] }>(
           "WLED Control Agent",
           wledProvider,
           wledSystemPrompt,
-          enrichedUserPrompt,
+          userPrompt,
           this.getWledAgentSchema(),
-          "wled_plan"
+          "wled_plan",
+          wledImageUrl
         ),
         this.queryAgent<{ displayTheme: AiLightshowDisplayTheme; visualScene: AiLightshowVisualScene }>(
           "TV Canvas Agent",
           canvasProvider,
           canvasSystemPrompt,
-          enrichedUserPrompt,
+          userPrompt,
           this.getCanvasAgentSchema(),
-          "canvas_theme"
+          "canvas_theme",
+          canvasImageUrl
         ),
         this.queryAgent<{ hostLine: string; tickerMessage: string }>(
           "VJ Host Agent",
           hostProvider,
           hostSystemPrompt,
-          enrichedUserPrompt,
+          userPrompt,
           this.getHostAgentSchema(),
-          "host_vj"
+          "host_vj",
+          hostImageUrl
         )
       ]);
 
@@ -501,7 +467,6 @@ export default class LightssIntegration implements IIntegration {
         throw new Error("All collaborative agents failed to respond.");
       }
 
-      // Merge and sanitize responses
       const steps = wledRes?.steps || [];
       const sanitizedSteps =
         steps.length > 0
@@ -527,10 +492,10 @@ export default class LightssIntegration implements IIntegration {
       }
 
       const mergedPlan: AiLightshowPlan = {
-        genre: this.safeString(wledRes?.genre || analystData.musicGenre, "ambient"),
-        mood: this.safeString(wledRes?.mood || analystData.emotionalMood, "chill"),
+        genre: this.safeString(wledRes?.genre, "ambient"),
+        mood: this.safeString(wledRes?.mood, "chill"),
         bpm: this.clampNumber(wledRes?.bpm, 60, 180, 95),
-        rationale: this.safeString(wledRes?.rationale, `Concept: ${analystData.visualConcept}`),
+        rationale: this.safeString(wledRes?.rationale, "Full collaborative plan"),
         hostLine: this.safeString(hostRes?.hostLine, "Tuning the room and the screen to this premium vibe."),
         displayTheme: this.sanitizeDisplayTheme(canvasRes?.displayTheme, sanitizedSteps[0]),
         visualScene: this.sanitizeVisualScene(canvasRes?.visualScene),
@@ -538,30 +503,18 @@ export default class LightssIntegration implements IIntegration {
         steps: sanitizedSteps
       };
 
-      // Register inside cache
-      const trackKey = this.getTrackKey(state);
-      if (this.planCache.size >= 100) {
-        const firstKey = this.planCache.keys().next().value;
-        if (firstKey) this.planCache.delete(firstKey);
-      }
-      this.planCache.set(trackKey, mergedPlan);
-
-      this.currentDisplayTheme = mergedPlan.displayTheme;
-      this.currentVisualScene = mergedPlan.visualScene;
-
-      this.emitAiMessage("Collaborative plan ready", mergedPlan.hostLine || mergedPlan.rationale, {
-        provider: wledProvider.provider,
-        model: wledProvider.model,
+      this.emitAiMessage("Full plan ready", mergedPlan.hostLine || mergedPlan.rationale, {
         plan: mergedPlan,
         hostLine: mergedPlan.hostLine,
         aiStatus: "connected",
-        lightStatus: "idle"
+        lightStatus: "idle",
+        planPhase: "full"
       });
 
       return mergedPlan;
     } catch (err) {
-      log.error("Lightss: collaborative multi-agent planning failed:", err);
-      this.emitAiMessage("Planning failed", "Collaborative agents could not complete the plan. Falling back.", {
+      log.error("Lightss: full collaborative plan failed:", err);
+      this.emitAiMessage("Planning failed", "Full agents could not complete. Sketch plan remains active.", {
         aiStatus: "failed",
         lightStatus: "idle"
       });
@@ -1317,6 +1270,12 @@ export default class LightssIntegration implements IIntegration {
       model = this.getOllamaModel();
     }
     return { provider, model };
+  }
+
+  private getAnalystPreamble(): string {
+    const customPrompt = (this.store.get("integrations.lightssAnalystPrompt") as string | null)?.trim();
+    const base = "Begin by briefly analyzing the song's genre, mood, and energy from the context and album art provided. Then produce your specialized output.";
+    return customPrompt ? `${base}\nAdditional style guidance: ${customPrompt}` : base;
   }
 
   private getSketchAiProvider(): AiProviderDetails {
