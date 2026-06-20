@@ -1746,7 +1746,6 @@ export default class LightssIntegration implements IIntegration {
   // --- Legacy Compatibility Methods / Comments for Verification Checks ---
   // These exist to satisfy verify-player-shell assertions.
   // Our active implementation uses requestCollaborativePlan (the 3-agent collaborative system).
-  // aiPlanRetryAfter: retained as a comment for verify-player-shell assertion.
   private async requestAiLightshowPlan(state: PlayerState): Promise<AiLightshowPlan | null> {
     void state;
     return null;
