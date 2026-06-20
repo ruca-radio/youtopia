@@ -261,6 +261,7 @@ assertIncludes("src/main/integrations/companion-server/index.ts", "maybeAutoReco
 assertIncludes("src/main/integrations/companion-server/index.ts", "preferredAudioFormat = getPreferredAudioFormat()");
 assertIncludes("src/main/integrations/companion-server/index.ts", "fallbackToMp3Audio");
 assertNotIncludes("src/main/integrations/companion-server/index.ts", "setInterval(function flash");
+assertNotIncludes("src/main/integrations/companion-server/index.ts", 'closest(".control-row")');
 assertIncludes("src/main/integrations/companion-server/index.ts", "icon-button");
 assertIncludes("src/main/integrations/companion-server/index.ts", "sr-only");
 assertIncludes("src/main/integrations/companion-server/index.ts", "Decrease audio delay");

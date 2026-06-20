@@ -882,11 +882,7 @@ function getTvDisplayHtml(): string {
 	    }
 	    function scheduleHudHide(reason) {
 	      if (hudHideTimer) clearTimeout(hudHideTimer);
-	      if (
-	        pinGate.classList.contains("visible") ||
-	        commandPending ||
-	        (document.activeElement && document.activeElement.closest && document.activeElement.closest(".control-row"))
-	      ) {
+	      if (pinGate.classList.contains("visible") || commandPending) {
 	        return;
 	      }
 	      const delay = reason === "first-load" ? 6500 : 3600;
