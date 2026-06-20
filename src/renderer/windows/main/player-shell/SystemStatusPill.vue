@@ -18,10 +18,15 @@ const props = defineProps<{
 }>();
 
 const open = ref(false);
-const title = computed(() => props.message?.title ?? "AI Lightshow");
+const title = computed(() => {
+  const base = props.message?.title ?? "AI Lightshow";
+  if (planPhase.value === "sketch") return `⚡ ${base}`;
+  return base;
+});
 const body = computed(() => props.message?.message ?? "Waiting for playback and controller status.");
 const provider = computed(() => props.message?.provider ?? "ollama");
 const model = computed(() => props.message?.model ?? "kimi-k2.7-code:cloud");
+const planPhase = computed(() => props.message?.planPhase ?? null);
 const lightsStatus = computed<StatusItem>(() => {
   if (props.wledStatus.state === "bad" || props.lightStatus.state === "bad") {
     return { label: "Lights failed", state: "bad" };
