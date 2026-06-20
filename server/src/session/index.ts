@@ -9,6 +9,11 @@
  *     operations defined in contracts/api.ts.
  *  4. Attaches session/room change events to socket.io broadcasts.
  *
+ * INTEGRATION (Gap 1): Per-session DspChain is created here and stored in a
+ * shared map that is accessible to both the canonical /sessions/:sid/dsp routes
+ * (Pod D) and the legacy /dsp/:sessionId/* routes (Pod C). Both route families
+ * read the same DspChainImpl — single source of truth.
+ *
  * Import this file in server/src/index.ts (or anywhere before loadAllPlugins())
  * to activate the Pod D subsystem.
  */
@@ -26,6 +31,19 @@ import {
   TransportKind,
   OutputCodec,
 } from "../contracts/index.js";
+// INTEGRATION (Gap 1): DSP factory from Pod C
+import { createSessionDsp } from "../dsp/index.js";
+// INTEGRATION (Gap 1+2): shared DSP registry (avoids circular imports with routes.ts)
+import { setSessionDsp, deleteSessionDsp } from "./dspRegistry.js";
+// INTEGRATION (Gap 2): register DSP control with the AI module for surface building
+import {
+  registerSessionDspControl,
+  unregisterSessionDspControl,
+} from "../ai/AiControllerImpl.js";
+
+// ---------------------------------------------------------------------------
+// Shared singletons
+// ---------------------------------------------------------------------------
 
 // Shared singletons — exported so routes and sockets can import them.
 export let sessionManager: SessionManager;
@@ -57,9 +75,19 @@ registerPlugin({
 
     for (const u of users) {
       const session = sessionManager.createSession(u.userId);
+
+      // INTEGRATION (Gap 1): Create a real DspChain for each session.
+      // Both /sessions/:sid/dsp and /dsp/:sessionId/* read the same chain.
+      const dspStack = createSessionDsp(session.sessionId);
+      setSessionDsp(session.sessionId, dspStack);
+      // Populate session.dsp[] immediately so GET /sessions/:sid returns populated dsp
+      sessionManager.updateDspSnapshot(session.sessionId, dspStack.chain.snapshot());
+      // INTEGRATION (Gap 2): Register with AI controller for surface building
+      registerSessionDspControl(session.sessionId, dspStack.aiControl);
+
       logger.info(
         { userId: u.userId, sessionId: session.sessionId },
-        "Default session created"
+        "Default session created with DSP chain"
       );
 
       const room = roomManager.createRoom({
@@ -73,6 +101,12 @@ registerPlugin({
         "Default room created"
       );
     }
+
+    // Clean up DSP registry when sessions are destroyed
+    sessionManager.on("session:destroyed", (sessionId: string) => {
+      deleteSessionDsp(sessionId);
+      unregisterSessionDspControl(sessionId);
+    });
 
     // ── Wire REST routes ────────────────────────────────────────────────────
     registerSessionRoutes(ctx.fastify, sessionManager, roomManager, syncClockEngine);

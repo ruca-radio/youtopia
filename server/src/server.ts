@@ -147,8 +147,13 @@ export async function buildApp(
     "/api/v1/zones/:zid/session",
     "/api/v1/rooms/:rid/clock",
   ]);
-  const skipRoutes = new Set([...podBRoutes, ...podDRoutes]);
-  registerContractRouteStubs(fastify, library ? skipRoutes : podDRoutes);
+  // INTEGRATION (Gap 2): AI routes registered by the ai/ plugin — skip stubs
+  const aiRoutes = new Set([
+    "/api/v1/sessions/:sid/ai/surface",
+    "/api/v1/sessions/:sid/ai/chat",
+  ]);
+  const skipRoutes = new Set([...podBRoutes, ...podDRoutes, ...aiRoutes]);
+  registerContractRouteStubs(fastify, library ? skipRoutes : new Set([...podDRoutes, ...aiRoutes]));
 
   // ── Socket.IO ─────────────────────────────────────────────────────────────
   const httpServer = fastify.server as unknown as HttpServer;

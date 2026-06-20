@@ -56,18 +56,25 @@ registerPlugin({
     ctx.logger.info("DSP subsystem initializing");
 
     // ── REST routes ──────────────────────────────────────────────────────────
-    // Minimal wiring into Pod A's server.ts Fastify instance.
-    // These routes let the AI control surface + UI read/set DSP params.
-    // We use a module-level session→DSP map; Pod D will replace this with
-    // the real session registry when it lands.
+    // INTEGRATION (Gap 1): These legacy routes now delegate to the shared
+    // per-session DSP registry (session/dspRegistry.ts) so both route families
+    // (/api/v1/dsp/:sessionId/* and /api/v1/sessions/:sid/dsp) share the same
+    // DspChain instance.  Falls back to a local map for sessions not yet in
+    // the registry (edge case: DSP accessed before session engine boots).
 
-    const sessionDspMap = new Map<string, ReturnType<typeof createSessionDsp>>();
+    const { getSessionDsp: getRegistryDsp } = await import("../session/dspRegistry.js");
+
+    const localFallbackMap = new Map<string, ReturnType<typeof createSessionDsp>>();
 
     function getOrCreateDsp(sessionId: string): ReturnType<typeof createSessionDsp> {
-      if (!sessionDspMap.has(sessionId)) {
-        sessionDspMap.set(sessionId, createSessionDsp(sessionId));
+      // Prefer the real chain from the registry (Gap 1)
+      const registered = getRegistryDsp(sessionId);
+      if (registered) return registered;
+      // Fall back to local (shouldn't happen in normal flow once session engine is up)
+      if (!localFallbackMap.has(sessionId)) {
+        localFallbackMap.set(sessionId, createSessionDsp(sessionId));
       }
-      return sessionDspMap.get(sessionId)!;
+      return localFallbackMap.get(sessionId)!;
     }
 
     // GET /api/v1/dsp/:sessionId/surface

@@ -109,3 +109,5 @@ scripts/CONTRIBUTORS.md
 # server/ standalone package — keep its node_modules out of the root tree
 server/node_modules/
 server/dist/
+# server/data/ — runtime data dir (test artifacts, SQLite, tokens) not tracked
+server/data/

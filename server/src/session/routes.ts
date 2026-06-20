@@ -40,9 +40,12 @@ import type {
   QueueAddCommand,
   ClientClockReport,
   ClockEvent,
+  DspParamPatch,
 } from "../contracts/index.js";
 import { SERVER_EVENTS } from "../contracts/index.js";
 import { logger } from "../logger.js";
+// INTEGRATION (Gap 1): shared DSP registry — single source of truth
+import { getSessionDsp } from "./dspRegistry.js";
 
 // Helper: get authUserId from request (Pod A convention)
 function getAuthUserId(request: FastifyRequest): string {
@@ -175,7 +178,8 @@ export function registerSessionRoutes(
     }
   );
 
-  // GET /api/v1/sessions/:sid/dsp
+  // GET /api/v1/sessions/:sid/dsp  → DspNodeState[] (canonical contract route)
+  // INTEGRATION (Gap 1): reads the real DspChain snapshot, not the stub [] array.
   fastify.get(
     "/api/v1/sessions/:sid/dsp",
     { preHandler: requireAuth },
@@ -183,7 +187,40 @@ export function registerSessionRoutes(
       const { sid } = request.params as { sid: string };
       const session = sm.getSession(sid);
       if (!session) return reply.code(404).send({ error: "SESSION_NOT_FOUND" });
-      return reply.send(session.dsp);
+      // Prefer live chain snapshot; fall back to session.dsp if chain not yet wired
+      const dspStack = getSessionDsp(sid);
+      const snapshot = dspStack ? dspStack.chain.snapshot() : session.dsp;
+      return reply.send(snapshot);
+    }
+  );
+
+  // POST /api/v1/sessions/:sid/dsp  body: DspParamPatch[]  → DspNodeState[]
+  // INTEGRATION (Gap 1): canonical dspPatch route — applies patches through the
+  // real AiDspControl (with clamping) and syncs the snapshot back to the session.
+  fastify.post(
+    "/api/v1/sessions/:sid/dsp",
+    { preHandler: requireAuth },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { sid } = request.params as { sid: string };
+      const session = sm.getSession(sid);
+      if (!session) return reply.code(404).send({ error: "SESSION_NOT_FOUND" });
+
+      const dspStack = getSessionDsp(sid);
+      if (!dspStack) {
+        return reply.code(503).send({ error: "DSP_NOT_INITIALIZED" });
+      }
+
+      const body = request.body;
+      if (!Array.isArray(body)) {
+        return reply.code(400).send({ error: "BODY_MUST_BE_ARRAY", message: "POST body must be a DspParamPatch[] array" });
+      }
+
+      // SAFETY: applyPatches clamps every value to descriptor bounds via clampToDescriptor
+      const newState = dspStack.aiControl.applyPatches(body as DspParamPatch[]);
+      // Sync snapshot back to Pod D's session record
+      sm.updateDspSnapshot(sid, newState);
+
+      return reply.send(newState);
     }
   );
 

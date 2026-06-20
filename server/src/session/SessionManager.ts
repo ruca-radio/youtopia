@@ -21,6 +21,7 @@ import type {
   QueueItem,
   Transport,
   NowPlaying,
+  Enrichment,
 } from "../contracts/index.js";
 import type { TransportCommand, QueueAddCommand } from "../contracts/index.js";
 import {
@@ -57,6 +58,9 @@ export class SessionManager extends EventEmitter {
 
   /** userId → Set<sessionId>: one user may have multiple sessions */
   private readonly userSessions = new Map<string, Set<string>>();
+
+  // INTEGRATION (Gap 3): async enrichment cache — populated lazily on track change
+  private readonly enrichmentCache = new Map<string, Enrichment | null>();
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -312,8 +316,8 @@ export class SessionManager extends EventEmitter {
 
   /**
    * Build a NowPlaying snapshot for the given session.
-   * enrichment + beat are injected from Pod C — callers pass null stubs here
-   * until the enrichment pipeline is wired.
+   * INTEGRATION (Gap 3): enrichment is included if cached; async enrichment is
+   * fired in the background on first access (non-blocking).
    */
   getNowPlaying(sessionId: string): NowPlaying | null {
     const session = this.sessions.get(sessionId);
@@ -324,13 +328,63 @@ export class SessionManager extends EventEmitter {
         ? (session.queue[session.transport.currentIndex] ?? null)
         : null;
 
+    // Pull cached enrichment (may be null if not yet fetched)
+    const cacheKey = current?.trackId ?? `${sessionId}:null`;
+    const cachedEnrichment = this.enrichmentCache.get(cacheKey) ?? null;
+
+    // Fire async enrichment in the background if we have a track but no cache entry
+    if (current && !this.enrichmentCache.has(cacheKey)) {
+      // Mark as "in-flight" immediately to prevent duplicate requests
+      this.enrichmentCache.set(cacheKey, null);
+      this._enrichTrackAsync(current.track, cacheKey, sessionId);
+    }
+
     return {
       sessionId: session.sessionId,
       transport: cloneTransport(session.transport),
       current,
-      enrichment: null,
-      beat: null,
+      enrichment: cachedEnrichment,
+      beat: null, // BeatTelemetry wired when ffmpeg pipeline is live (future pass)
     };
+  }
+
+  /**
+   * Async enrichment — fires in the background, stores result in cache.
+   * Does NOT block the NowPlaying response.
+   * INTEGRATION (Gap 3): wires EnrichmentEngine from Pod C.
+   */
+  private _enrichTrackAsync(
+    track: QueueItem["track"],
+    cacheKey: string,
+    sessionId: string,
+  ): void {
+    // Deferred import to avoid circular dependency at module load time
+    void import("../enrichment/index.js").then(async ({ EnrichmentEngine, getEnrichmentProviders }) => {
+      try {
+        const engine = new EnrichmentEngine(getEnrichmentProviders());
+        const enrichment = await engine.enrich(track);
+        this.enrichmentCache.set(cacheKey, enrichment);
+        // Emit update so socket handler can broadcast the enriched now-playing
+        const session = this.sessions.get(sessionId);
+        if (session) this.emit("session:updated", session);
+        logger.debug({ sessionId, trackId: track.id }, "Track enrichment complete");
+      } catch (err) {
+        // Non-fatal: leave cache as null
+        logger.debug({ err, sessionId }, "Track enrichment failed (non-fatal)");
+      }
+    }).catch((err) => {
+      logger.debug({ err }, "Failed to import enrichment module");
+    });
+  }
+
+  /**
+   * Clear enrichment cache for a session (called when track changes).
+   */
+  clearEnrichmentCache(sessionId: string): void {
+    // Clear all entries that don't belong to other sessions
+    // (Simple approach: clear all; they will re-fetch on next getNowPlaying)
+    this.enrichmentCache.clear();
+    void sessionId; // reserved
   }
 
   // ── Zone binding ───────────────────────────────────────────────────────────

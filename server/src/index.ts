@@ -18,6 +18,8 @@ import { logger } from "./logger.js";
 import "./session/index.js";
 // Pod B: source plugin registration (side-effect import calls registerPlugin for each source)
 import "./sources/index.js";
+// INTEGRATION (Gap 2): AI controller plugin — must be imported AFTER session/index.js
+import "./ai/index.js";
 import { initLibraryService } from "./sources/library/index.js";
 
 async function main(): Promise<void> {
