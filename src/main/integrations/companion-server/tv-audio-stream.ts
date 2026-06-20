@@ -28,7 +28,7 @@ const TV_AUDIO_CONTENT_TYPES: Record<TvAudioFormat, string> = {
   webm: "audio/webm"
 };
 
-const TV_PROGRAM_CONTENT_TYPE = "video/webm";
+const TV_PROGRAM_CONTENT_TYPE = "video/mp4";
 const PIPEWIRE_NODE_NAME_KEY = "node.name";
 
 export function getTvAudioStatus(): TvAudioStatus {
@@ -91,8 +91,30 @@ export function createTvProgramStream(metadata: TvProgramMetadata): TvProgramStr
 function getTvProgramFfmpegArgs(source: string, metadata: TvProgramMetadata): string[] {
   const title = escapeDrawText(metadata.title || "Youtopia");
   const artist = escapeDrawText(metadata.artist || "Server program feed");
+  const videoEncoder = selectTvProgramVideoEncoder();
+  const videoEncoderArgs =
+    videoEncoder === "h264_nvenc"
+      ? [
+          "-codec:v",
+          "h264_nvenc",
+          "-preset",
+          "llhp",
+          "-tune",
+          "ull",
+          "-profile:v",
+          "main",
+          "-rc",
+          "cbr",
+          "-b:v",
+          "2800k",
+          "-maxrate",
+          "2800k",
+          "-bufsize",
+          "1400k"
+        ]
+      : ["-codec:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-profile:v", "main", "-b:v", "2200k", "-maxrate", "2200k", "-bufsize", "1100k"];
   const filter = [
-    "[0:a]asplit=2[aout][avis]",
+    "[0:a][1:a]amix=inputs=2:duration=longest:dropout_transition=0,asplit=2[aout][avis]",
     "[avis]showwaves=s=1280x720:mode=line:rate=30:colors=0xef4444|0x22c55e,format=yuv420p[v0]",
     `[v0]drawtext=text='${title}':x=58:y=54:fontsize=44:fontcolor=white:box=1:boxcolor=black@0.45:boxborderw=18[v1]`,
     `[v1]drawtext=text='${artist}':x=60:y=122:fontsize=26:fontcolor=0xd1d5db:box=1:boxcolor=black@0.35:boxborderw=12[v]`
@@ -121,44 +143,46 @@ function getTvProgramFfmpegArgs(source: string, metadata: TvProgramMetadata): st
     "960",
     "-i",
     source,
+    "-f",
+    "lavfi",
+    "-i",
+    "anullsrc=channel_layout=stereo:sample_rate=48000",
     "-filter_complex",
     filter,
     "-map",
     "[v]",
     "-map",
     "[aout]",
-    "-codec:v",
-    "libvpx",
-    "-deadline",
-    "realtime",
-    "-cpu-used",
-    "6",
-    "-b:v",
-    "1800k",
+    ...videoEncoderArgs,
     "-r",
     "30",
     "-g",
-    "60",
+    "30",
+    "-keyint_min",
+    "30",
+    "-pix_fmt",
+    "yuv420p",
     "-codec:a",
-    "libopus",
+    "aac",
     "-b:a",
-    "160k",
-    "-application",
-    "lowdelay",
+    "128k",
     "-ar",
     "48000",
     "-ac",
     "2",
+    "-movflags",
+    "frag_keyframe+empty_moov+default_base_moof",
     "-f",
-    "webm",
-    "-live",
-    "1",
-    "-cluster_time_limit",
-    "100",
+    "mp4",
     "-flush_packets",
     "1",
     "pipe:1"
   ];
+}
+
+function selectTvProgramVideoEncoder(): "h264_nvenc" | "libx264" {
+  if (ffmpegEncoderAvailable("h264_nvenc")) return "h264_nvenc";
+  return "libx264";
 }
 
 function getTvAudioFfmpegArgs(source: string, format: TvAudioFormat): string[] {
@@ -247,6 +271,15 @@ function getDefaultPipewireSink(): string | null {
 
 function commandAvailable(command: string): boolean {
   const result = spawnSync(command, ["-version"], {
+    stdio: "ignore",
+    timeout: 1500
+  });
+
+  return !result.error && result.status === 0;
+}
+
+function ffmpegEncoderAvailable(encoder: string): boolean {
+  const result = spawnSync("ffmpeg", ["-hide_banner", "-h", `encoder=${encoder}`], {
     stdio: "ignore",
     timeout: 1500
   });

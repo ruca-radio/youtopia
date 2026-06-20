@@ -15,7 +15,8 @@ const checks = [
   {
     file: "firetv-receiver/src/main/java/studio/youtopia/tvreceiver/MainActivity.java",
     patterns: [
-      /http:\/\/10\.27\.27\.96:9863\/tv/,
+      /http:\/\/10\.27\.27\.96:9863\/tv\/program-receiver/,
+      /\/tv\/program-receiver/,
       /FLAG_KEEP_SCREEN_ON/,
       /setMediaPlaybackRequiresUserGesture\(false\)/,
       /dispatchKeyEvent/,

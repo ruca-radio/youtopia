@@ -462,39 +462,111 @@ function getTvReceiverHtml(): string {
     * { box-sizing: border-box; }
     body { margin: 0; height: 100vh; overflow: hidden; background: #000; color: #f5f5f5; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     video { width: 100vw; height: 100vh; display: block; object-fit: cover; background: #000; }
-    .overlay { position: fixed; inset: auto 22px 22px 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px; pointer-events: none; }
-    .status { min-width: 0; color: rgba(255,255,255,.72); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 14px #000; }
-    button { pointer-events: auto; appearance: none; display: inline-grid; place-items: center; border: 1px solid rgba(255,255,255,.24); background: rgba(255,255,255,.1); color: #fff; border-radius: 999px; width: 42px; height: 42px; padding: 0; font: inherit; line-height: 0; }
-    button svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; }
+    .controls { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 999px; background: rgba(0,0,0,.34); opacity: 0; transition: opacity 320ms ease; }
+    body[data-controls="visible"] .controls { opacity: 1; }
+    button { appearance: none; width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.24); background: rgba(255,255,255,.10); color: #fff; line-height: 0; }
+    button.primary { width: 54px; height: 54px; background: #f5f5f5; color: #050505; border-color: #f5f5f5; }
+    button svg { width: 21px; height: 21px; display: block; fill: none; stroke: currentColor; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .status { position: fixed; left: 18px; bottom: 14px; max-width: calc(100vw - 36px); color: rgba(255,255,255,.42); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 14px #000; opacity: 0; transition: opacity 300ms ease; }
+    body[data-status="visible"] .status { opacity: 1; }
   </style>
 </head>
 <body>
-  <video id="program" autoplay playsinline controls src="/tv/program"></video>
-  <div class="overlay">
-    <div id="status" class="status">Server program feed</div>
-    <button id="reload" type="button" aria-label="Reload program" title="Reload program">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"/><path d="M3 12A9 9 0 0 1 18.3 5.6"/><path d="M18 2v4h-4"/><path d="M6 22v-4h4"/></svg>
-      <span class="sr-only">Reload program</span>
+  <video id="program" autoplay playsinline src="/tv/program"></video>
+  <div class="controls">
+    <button data-command="previous" type="button" aria-label="Previous track" title="Previous track">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14"/><path d="M19 6l-10 6 10 6V6z"/></svg>
+      <span class="sr-only">Previous track</span>
+    </button>
+    <button class="primary" data-command="playPause" type="button" aria-label="Play or pause" title="Play or pause">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l9-7-9-7z"/><path d="M18 5v14"/></svg>
+      <span class="sr-only">Play or pause</span>
+    </button>
+    <button data-command="next" type="button" aria-label="Next track" title="Next track">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14"/><path d="M5 6l10 6-10 6V6z"/></svg>
+      <span class="sr-only">Next track</span>
     </button>
   </div>
+  <div id="status" class="status">Server program feed</div>
   <script>
+    const PIN_STORAGE_KEY = "youtopiaTvControlPin";
     const program = document.getElementById("program");
     const status = document.getElementById("status");
-    const reload = document.getElementById("reload");
-    function setStatus(text) { status.textContent = text; }
-    function reloadProgram() {
+    const controls = document.querySelector(".controls");
+    let statusTimer = null;
+    let restartTimer = null;
+    let controlsTimer = null;
+    function controlHeaders() {
+      const pin = localStorage.getItem(PIN_STORAGE_KEY) || "";
+      return pin ? { "X-Tv-Control-Pin": pin } : {};
+    }
+    function setStatus(text) {
+      status.textContent = text;
+      document.body.dataset.status = "visible";
+      if (statusTimer) clearTimeout(statusTimer);
+      statusTimer = setTimeout(() => {
+        document.body.dataset.status = "hidden";
+      }, 2600);
+    }
+    function restartProgramStream(reason) {
+      if (restartTimer) clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        restartTimer = null;
+        const muted = program.muted;
+        program.src = "/tv/program?ts=" + Date.now();
+        program.muted = muted;
+        program.play().catch(() => setStatus("Waiting for server program feed"));
+      }, reason === "error" ? 350 : 900);
+    }
+    async function sendProgramControl(command) {
+      showControls();
+      try {
+        const response = await fetch("/tv/control", {
+          method: "POST",
+          headers: Object.assign({ "Content-Type": "application/json" }, controlHeaders()),
+          body: JSON.stringify({ command })
+        });
+        if (!response.ok) setStatus("TV control PIN required in /tv once");
+      } catch (error) {
+        setStatus("TV control unavailable");
+      }
+    }
+    window.youtopiaTvControl = function(command) {
+      const allowed = ["playPause", "previous", "next"];
+      if (allowed.indexOf(String(command)) !== -1) sendProgramControl(String(command));
+    };
+    function showControls() {
+      document.body.dataset.controls = "visible";
+      if (controlsTimer) clearTimeout(controlsTimer);
+      controlsTimer = setTimeout(() => {
+        document.body.dataset.controls = "hidden";
+      }, 3600);
+    }
+    function startProgram() {
       const muted = program.muted;
       program.src = "/tv/program?ts=" + Date.now();
       program.muted = muted;
-      program.play().catch(() => setStatus("Select play to start the server feed"));
+      program.play().catch(() => setStatus("Waiting for server program feed"));
     }
     program.addEventListener("playing", () => setStatus("Server output live: audio and video in one feed"));
-    program.addEventListener("waiting", () => setStatus("Buffering server program feed"));
-    program.addEventListener("error", () => setStatus("Server program feed unavailable"));
-    reload.addEventListener("click", reloadProgram);
+    program.addEventListener("waiting", () => {
+      setStatus("Resyncing server program feed");
+      restartProgramStream("waiting");
+    });
+    program.addEventListener("error", () => {
+      setStatus("Restarting server program feed");
+      restartProgramStream("error");
+    });
+    document.querySelectorAll("[data-command]").forEach(button => {
+      button.addEventListener("click", () => sendProgramControl(button.dataset.command));
+    });
+    ["pointermove", "pointerdown", "touchstart", "keydown", "focusin"].forEach(eventName => {
+      window.addEventListener(eventName, showControls, { passive: true });
+    });
     setTimeout(() => {
-      program.play().catch(() => setStatus("Select play to start the server feed"));
+      program.play().catch(startProgram);
+      showControls();
     }, 250);
   </script>
 </body>
@@ -713,21 +785,9 @@ function getTvDisplayHtml(): string {
           <svg data-icon="volume" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l6 5V5l-6 5H4z"/><path d="M17 9.5a4 4 0 0 1 0 5"/></svg>
           <span class="sr-only">Mute TV</span>
         </button>
-        <button id="audioResync" class="icon-button" type="button" aria-label="Resync audio" title="Resync audio">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"/><path d="M3 12A9 9 0 0 1 18.3 5.6"/><path d="M18 2v4h-4"/><path d="M6 22v-4h4"/></svg>
-          <span class="sr-only">Resync audio</span>
-        </button>
         <button id="djGptConnect" class="icon-button" type="button" aria-label="Start DJ-GPT voice" title="Start DJ-GPT voice">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
           <span class="sr-only">Start DJ-GPT voice</span>
-        </button>
-        <button id="audioDelayDown" class="icon-button" type="button" aria-label="Decrease audio delay" title="Decrease audio delay">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M9 6l-6 6 6 6"/></svg>
-          <span class="sr-only">Decrease audio delay</span>
-        </button>
-        <button id="audioDelayUp" class="icon-button" type="button" aria-label="Increase audio delay" title="Increase audio delay">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M15 6l6 6-6 6"/></svg>
-          <span class="sr-only">Increase audio delay</span>
         </button>
         <span id="audioStatus" class="audio-status">TV audio idle</span>
       </div>
@@ -860,14 +920,9 @@ function getTvDisplayHtml(): string {
 	    const djGptAudio = document.getElementById("djGptAudio");
 	    const audioConnect = document.getElementById("audioConnect");
 	    const audioMute = document.getElementById("audioMute");
-	    const audioResync = document.getElementById("audioResync");
 	    const djGptConnect = document.getElementById("djGptConnect");
-	    const audioDelayDown = document.getElementById("audioDelayDown");
-	    const audioDelayUp = document.getElementById("audioDelayUp");
 	    const audioStatus = document.getElementById("audioStatus");
 	    let audioConnected = false;
-	    let audioDelayMs = 0;
-	    let pendingAudioConnect = null;
 	    let audioStatusTimer = null;
 	    let preferredAudioFormat = "webm";
 	    let audioRecoveries = 0;
@@ -1337,24 +1392,9 @@ function getTvDisplayHtml(): string {
 	        setAudioStatus("Select Connect Audio again", "bad");
 	      }
 	    }
-	    function scheduleDelayedAudioConnect() {
-	      if (pendingAudioConnect) {
-	        clearTimeout(pendingAudioConnect);
-	        pendingAudioConnect = null;
-	      }
-	      if (audioDelayMs <= 0) {
-	        connectTvAudio();
-	        return;
-	      }
-	      setAudioStatus("Starting TV audio in " + audioDelayMs + "ms", "busy");
-	      pendingAudioConnect = setTimeout(() => {
-	        pendingAudioConnect = null;
-	        connectTvAudio();
-	      }, audioDelayMs);
-	    }
 	    function resyncTvAudio() {
 	      if (!audioConnected) {
-	        scheduleDelayedAudioConnect();
+	        connectTvAudio();
 	        return;
 	      }
 	      const wasMuted = tvAudio.muted;
@@ -1362,7 +1402,7 @@ function getTvDisplayHtml(): string {
 	      tvAudio.removeAttribute("src");
 	      tvAudio.load();
 	      tvAudio.muted = wasMuted;
-	      scheduleDelayedAudioConnect();
+	      connectTvAudio();
 	    }
 	    function disconnectTvAudio() {
 	      audioConnected = false;
@@ -1373,10 +1413,6 @@ function getTvDisplayHtml(): string {
 	        audioRecoveryTimer = null;
 	      }
 	      preferredAudioFormat = getPreferredAudioFormat();
-	      if (pendingAudioConnect) {
-	        clearTimeout(pendingAudioConnect);
-	        pendingAudioConnect = null;
-	      }
 	      tvAudio.pause();
 	      tvAudio.removeAttribute("src");
 	      tvAudio.load();
@@ -1404,21 +1440,12 @@ function getTvDisplayHtml(): string {
 	        fallbackToMp3Audio(reason || "buffering");
 	      }, 1400);
 	    }
-	    audioConnect.addEventListener("click", scheduleDelayedAudioConnect);
+	    audioConnect.addEventListener("click", connectTvAudio);
 	    djGptConnect.addEventListener("click", connectDjGptVoice);
 	    audioMute.addEventListener("click", () => {
 	      tvAudio.muted = !tvAudio.muted;
 	      setButtonLabel(audioMute, tvAudio.muted ? "Unmute TV" : "Mute TV");
 	      setAudioStatus(tvAudio.muted ? "TV audio muted" : "TV audio connected", tvAudio.muted ? "ready" : "ok");
-	    });
-	    audioResync.addEventListener("click", resyncTvAudio);
-	    audioDelayDown.addEventListener("click", () => {
-	      audioDelayMs = Math.max(0, audioDelayMs - 250);
-	      setAudioStatus("Audio delay " + audioDelayMs + "ms", "ready");
-	    });
-	    audioDelayUp.addEventListener("click", () => {
-	      audioDelayMs = Math.min(3000, audioDelayMs + 250);
-	      setAudioStatus("Audio delay " + audioDelayMs + "ms", "ready");
 	    });
 	    tvAudio.addEventListener("playing", () => {
 	      audioWaitingSince = 0;
