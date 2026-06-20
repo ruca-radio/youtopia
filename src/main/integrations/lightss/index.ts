@@ -24,9 +24,7 @@ const OPENAI_TIMEOUT_MS = 20000;
 const OLLAMA_TIMEOUT_MS = 45000;
 const GEMINI_TIMEOUT_MS = 25000;
 const AI_LIGHTSHOW_INTERVAL_MS = 14000;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SKETCH_TIMEOUT_MS = 8000;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VISION_CAPABLE_PROVIDERS: LightssAiProvider[] = [LightssAiProvider.Gemini, LightssAiProvider.OpenAI, LightssAiProvider.OpenRouter];
 const AI_PLAN_STEP_COUNT = 4;
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -571,6 +569,98 @@ export default class LightssIntegration implements IIntegration {
     }
   }
 
+  private async requestSketchPlan(state: PlayerState): Promise<AiLightshowPlan | null> {
+    const provider = this.getSketchAiProvider();
+    const context = this.buildSketchContext(state);
+    const albumArtUrl = this.getBestThumbnailUrl(state.videoDetails?.thumbnails);
+    const visionEnabled = Boolean(this.store.get("integrations.lightssVisionEnabled") ?? true);
+    const imageUrl = visionEnabled && albumArtUrl && VISION_CAPABLE_PROVIDERS.includes(provider.provider) ? albumArtUrl : undefined;
+
+    log.info(`Lightss: sketch agent (${provider.provider}/${provider.model}) analyzing "${context.song.title}"${imageUrl ? " with album art" : ""}`);
+    this.emitAiMessage("Sketch plan", `Sketch agent (${provider.provider}) analyzing ${context.song.title}...`, {
+      provider: provider.provider,
+      model: provider.model,
+      aiStatus: "planning",
+      lightStatus: "idle",
+      planPhase: "sketch"
+    });
+
+    const systemPrompt = [
+      "You are a music visualizer AI. Analyze the song from its title, artist, album, audio profile, and album art (if provided), then design a complete light show and TV display.",
+      "Begin by determining the genre, mood, estimated BPM, and a creative visual concept that guides all your choices.",
+      "Then fill every field in the response schema with safe, elegant settings that match the song's energy.",
+      "Rules: no strobe, no blinking effects, long transitions (transitionMs >= 900), safe TV host persona.",
+      "Do not make abrupt color changes to TV artifacts mid-song.",
+      "Soften flash and transition intensity — keep them elegant and cinematic.",
+      `Use only effect IDs from: ${SAFE_EFFECTS.join(",")} and palette IDs from: ${SAFE_PALETTES.join(",")}.`,
+      "Keep the host line under 140 characters. Make it vivid and specific to this track.",
+      "Return JSON matching the schema precisely."
+    ].join("\n");
+
+    const userPrompt = JSON.stringify({
+      song: context.song,
+      audioProfile: context.audioProfile,
+      roomLighting: context.roomLighting,
+      tvOutput: context.tvOutput,
+      safetyRules: context.safetyRules
+    });
+
+    type SketchResult = {
+      genre: string;
+      mood: string;
+      bpm: number;
+      rationale: string;
+      hostLine: string;
+      tickerMessage: string;
+      displayTheme: AiLightshowDisplayTheme;
+      visualScene: AiLightshowVisualScene;
+      steps: AiLightshowStep[];
+    };
+
+    const result = await this.queryAgent<SketchResult>(
+      "Sketch Agent",
+      provider,
+      systemPrompt,
+      userPrompt,
+      this.getSketchAgentSchema(),
+      "sketch_plan",
+      imageUrl,
+      SKETCH_TIMEOUT_MS
+    );
+
+    if (!result) return null;
+
+    const rawSteps: Partial<AiLightshowStep>[] = Array.isArray(result.steps) ? result.steps : [];
+    const sanitizedSteps = rawSteps.map(step => this.sanitizeAiStep(step));
+    while (sanitizedSteps.length < AI_PLAN_STEP_COUNT) {
+      sanitizedSteps.push(
+        this.sanitizeAiStep({
+          reason: "Safe sketch step",
+          brightness: 150,
+          transitionMs: 1200,
+          effect: 98,
+          speed: 100,
+          intensity: 100,
+          palette: 0,
+          primaryColor: [120, 64, 180, 0],
+          secondaryColor: [32, 180, 160, 0]
+        })
+      );
+    }
+
+    return {
+      genre: this.safeString(result.genre, "ambient"),
+      mood: this.safeString(result.mood, "chill"),
+      bpm: this.clampNumber(result.bpm, 60, 180, 95),
+      rationale: this.safeString(result.rationale, "AI sketch plan"),
+      hostLine: this.safeString(result.hostLine, "Getting the vibe right..."),
+      displayTheme: this.sanitizeDisplayTheme(result.displayTheme, sanitizedSteps[0]),
+      visualScene: this.sanitizeVisualScene(result.visualScene),
+      tickerMessage: this.safeString(result.tickerMessage, "Sketch plan — full analysis loading..."),
+      steps: sanitizedSteps
+    };
+  }
+
   private async queryAgent<T>(
     agentName: string,
     provider: AiProviderDetails,
@@ -804,6 +894,72 @@ export default class LightssIntegration implements IIntegration {
       properties: {
         hostLine: { type: "string" },
         tickerMessage: { type: "string" }
+      }
+    };
+  }
+
+  private getSketchAgentSchema(): JsonValue {
+    return {
+      type: "object",
+      additionalProperties: false,
+      required: ["genre", "mood", "bpm", "rationale", "hostLine", "tickerMessage", "displayTheme", "visualScene", "steps"],
+      properties: {
+        genre: { type: "string" },
+        mood: { type: "string" },
+        bpm: { type: "number" },
+        rationale: { type: "string" },
+        hostLine: { type: "string" },
+        tickerMessage: { type: "string" },
+        displayTheme: {
+          type: "object",
+          additionalProperties: false,
+          required: ["fontFamily", "backgroundColor", "accentColor", "vuLowColor", "vuMidColor", "vuHighColor"],
+          properties: {
+            fontFamily: { type: "string", enum: ["system", "display", "mono"] },
+            backgroundColor: { type: "string" },
+            accentColor: { type: "string" },
+            vuLowColor: { type: "string" },
+            vuMidColor: { type: "string" },
+            vuHighColor: { type: "string" }
+          }
+        },
+        visualScene: {
+          type: "object",
+          additionalProperties: false,
+          required: ["backgroundStyle", "visualizerStyle", "vuStyle", "motion", "density", "intensity", "logoMode", "captionMode", "albumArtMode"],
+          properties: {
+            backgroundStyle: { type: "string", enum: ["solid", "gradient"] },
+            visualizerStyle: { type: "string", enum: ["vuBars", "vuDots", "spectrumLine", "none"] },
+            vuStyle: { type: "string", enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow"] },
+            motion: { type: "string", enum: ["static", "slow", "medium"] },
+            density: { type: "integer", minimum: 0, maximum: 100 },
+            intensity: { type: "integer", minimum: 0, maximum: 100 },
+            logoMode: { type: "string", enum: ["off", "small", "prominent"] },
+            captionMode: { type: "string", enum: ["off", "minimal", "full"] },
+            albumArtMode: { type: "string", enum: ["off", "corner", "hero", "ambient"] }
+          }
+        },
+        steps: {
+          type: "array",
+          minItems: 4,
+          maxItems: 4,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["reason", "brightness", "transitionMs", "effect", "speed", "intensity", "palette", "primaryColor", "secondaryColor"],
+            properties: {
+              reason: { type: "string" },
+              brightness: { type: "integer" },
+              transitionMs: { type: "integer" },
+              effect: { type: "integer", enum: SAFE_EFFECTS },
+              speed: { type: "integer" },
+              intensity: { type: "integer" },
+              palette: { type: "integer", enum: SAFE_PALETTES },
+              primaryColor: { type: "array", minItems: 4, maxItems: 4, items: { type: "integer" } },
+              secondaryColor: { type: "array", minItems: 4, maxItems: 4, items: { type: "integer" } }
+            }
+          }
+        }
       }
     };
   }
@@ -1053,7 +1209,7 @@ export default class LightssIntegration implements IIntegration {
     title: string,
     message: string,
     options: Partial<AiProviderDetails> &
-      Pick<Partial<RendererLightssAiMessage>, "aiStatus" | "wledStatus" | "lightStatus" | "displayTheme" | "tickerMessage" | "hostLine"> & {
+      Pick<Partial<RendererLightssAiMessage>, "aiStatus" | "wledStatus" | "lightStatus" | "displayTheme" | "tickerMessage" | "hostLine" | "planPhase"> & {
         plan?: AiLightshowPlan;
       } = {}
   ): void {
@@ -1076,6 +1232,7 @@ export default class LightssIntegration implements IIntegration {
       visualScene,
       tickerMessage: options.tickerMessage ?? plan?.tickerMessage,
       hostLine: options.hostLine ?? plan?.hostLine,
+      planPhase: options.planPhase,
       timestamp: Date.now()
     };
 
@@ -1372,6 +1529,53 @@ export default class LightssIntegration implements IIntegration {
       wled: {
         host: this.getWledHost(),
         snapshot: wledSnapshot
+      }
+    };
+  }
+
+  private buildSketchContext(state: PlayerState): Pick<AiLightshowContext, "song" | "audioProfile" | "roomLighting" | "tvOutput" | "safetyRules"> {
+    const details = state.videoDetails;
+    const albumArtUrl = this.getBestThumbnailUrl(details?.thumbnails);
+    const durationSeconds = details?.durationSeconds ?? 0;
+    const progressPercent = durationSeconds ? Math.min(100, Math.max(0, Math.round((state.videoProgress / durationSeconds) * 100))) : 0;
+    const audioProfile = getLatestTvAudioProfile();
+
+    return {
+      song: {
+        title: details?.title ?? "Unknown track",
+        artist: details?.author ?? "Unknown artist",
+        album: details?.album ?? "",
+        albumArtUrl,
+        durationSeconds,
+        videoType: String(details?.videoType ?? ""),
+        isLive: Boolean(details?.isLive),
+        likeStatus: String(details?.likeStatus ?? ""),
+        volume: state.volume,
+        progressSeconds: state.videoProgress,
+        progressPercent,
+        status: this.videoStateName(state.trackState)
+      },
+      audioProfile,
+      tvOutput: {
+        vuStyle: this.currentVisualScene?.vuStyle ?? "bars",
+        albumArtAvailable: Boolean(albumArtUrl),
+        albumArtModeChoices: ["off", "corner", "hero", "ambient"],
+        visualizerChoices: ["vuBars", "vuDots", "spectrumLine", "none"],
+        captionChoices: ["off", "minimal", "full"]
+      },
+      roomLighting: {
+        topology: "A single WLED string is mounted behind the TV as ambient bias lighting that washes the wall around the screen.",
+        colorStrategy:
+          "Treat the LEDs as a wall-wash extension of the TV image. Match or gently complement screen-edge colors, avoid overpowering the display, and morph hue/brightness slowly during a song."
+      },
+      safetyRules: {
+        noStrobe: true,
+        noBlinkingEffects: true,
+        noAbruptMidSongArtifactColorChanges: true,
+        useOnlySafeEffectIds: SAFE_EFFECTS,
+        useOnlySafePaletteIds: SAFE_PALETTES,
+        maxBrightness: 220,
+        minTransitionMs: 600
       }
     };
   }
