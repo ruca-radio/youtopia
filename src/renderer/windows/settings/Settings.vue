@@ -117,7 +117,7 @@ const lightssAnalystPrompt = ref<string | null>(integrations.lightssAnalystPromp
 const lightssSketchProvider = ref<LightssAiProvider>(integrations.lightssSketchProvider ?? LightssAiProvider.Gemini);
 const lightssSketchModel = ref<string>(integrations.lightssSketchModel ?? "gemini-2.5-flash");
 const lightssVisionEnabled = ref<boolean>(integrations.lightssVisionEnabled ?? true);
-const stepIntervalSecs = ref<number>((integrations.lightssStepIntervalMs ?? 7000) / 1000);
+const lightssStepIntervalSecs = ref<number>((integrations.lightssStepIntervalMs ?? 7000) / 1000);
 
 const audioCompressorEnabled = ref<boolean>(integrations.audioCompressorEnabled ?? true);
 const audioCompressorThreshold = ref<number>(integrations.audioCompressorThreshold ?? -24);
@@ -208,7 +208,7 @@ store.onDidAnyChange(async newState => {
   lightssSketchProvider.value = newState.integrations.lightssSketchProvider ?? LightssAiProvider.Gemini;
   lightssSketchModel.value = newState.integrations.lightssSketchModel ?? "gemini-2.5-flash";
   lightssVisionEnabled.value = newState.integrations.lightssVisionEnabled ?? true;
-  stepIntervalSecs.value = (newState.integrations.lightssStepIntervalMs ?? 7000) / 1000;
+  lightssStepIntervalSecs.value = (newState.integrations.lightssStepIntervalMs ?? 7000) / 1000;
   audioCompressorEnabled.value = newState.integrations.audioCompressorEnabled ?? true;
   audioCompressorThreshold.value = newState.integrations.audioCompressorThreshold ?? -24;
   audioCompressorRatio.value = newState.integrations.audioCompressorRatio ?? 12;
@@ -329,7 +329,7 @@ async function settingsChanged() {
   store.set("integrations.lightssSketchProvider", lightssSketchProvider.value);
   store.set("integrations.lightssSketchModel", lightssSketchModel.value);
   store.set("integrations.lightssVisionEnabled", lightssVisionEnabled.value);
-  store.set("integrations.lightssStepIntervalMs", Math.round(stepIntervalSecs.value) * 1000);
+  store.set("integrations.lightssStepIntervalMs", Math.round(lightssStepIntervalSecs.value) * 1000);
   store.set("integrations.audioCompressorEnabled", audioCompressorEnabled.value);
   store.set("integrations.audioCompressorThreshold", audioCompressorThreshold.value);
   store.set("integrations.audioCompressorRatio", audioCompressorRatio.value);
@@ -1155,7 +1155,7 @@ window.ytmd.handleUpdateDownloaded(() => {
                     @change="settingsChanged"
                   />
                   <YTMDSetting
-                    v-model.number="stepIntervalSecs"
+                    v-model.number="lightssStepIntervalSecs"
                     type="range"
                     name="Step interval (seconds)"
                     description="How often the pipeline re-runs during a track"
