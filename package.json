@@ -16,9 +16,10 @@
     "verify:firetv-receiver": "node scripts/verify-firetv-receiver.mjs",
     "build:firetv-receiver": "bash scripts/build-firetv-receiver.sh",
     "lint": "eslint --ext .ts,.tsx,.vue .",
-    "lint:fix": "eslint --ext .ts,.tsx,.vue .",
-    "prettier": "prettier --check *.{ts,tsx,vue}",
-    "prettier:fix": "prettier --write *.{ts,tsx,vue}",
+    "lint:fix": "eslint --ext .ts,.tsx,.vue . --fix",
+    "typecheck": "tsc -p src/main/tsconfig.json --noEmit && tsc -p src/renderer/tsconfig.json --noEmit",
+    "prettier": "prettier --check \"**/*.{ts,tsx,vue}\"",
+    "prettier:fix": "prettier --write \"**/*.{ts,tsx,vue}\"",
     "postinstall": "husky install"
   },
   "keywords": [],

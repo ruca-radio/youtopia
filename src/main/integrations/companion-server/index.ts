@@ -39,8 +39,12 @@ export default class CompanionServer implements IIntegration {
   private buildDjGptSessionConfig() {
     const state = getTvDisplayState();
     const audioProfile = getLatestTvAudioProfile();
-    const model = (this.store.get("integrations.lightssOpenAIRealtimeModel") || DEFAULT_OPENAI_REALTIME_MODEL).trim() || DEFAULT_OPENAI_REALTIME_MODEL;
-    const voice = (this.store.get("integrations.lightssOpenAIRealtimeVoice") || DEFAULT_OPENAI_REALTIME_VOICE).trim() || DEFAULT_OPENAI_REALTIME_VOICE;
+    const model =
+      (this.store.get<"integrations.lightssOpenAIRealtimeModel", string>("integrations.lightssOpenAIRealtimeModel") || DEFAULT_OPENAI_REALTIME_MODEL).trim() ||
+      DEFAULT_OPENAI_REALTIME_MODEL;
+    const voice =
+      (this.store.get<"integrations.lightssOpenAIRealtimeVoice", string>("integrations.lightssOpenAIRealtimeVoice") || DEFAULT_OPENAI_REALTIME_VOICE).trim() ||
+      DEFAULT_OPENAI_REALTIME_VOICE;
 
     return {
       type: "realtime",

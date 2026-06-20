@@ -750,7 +750,10 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
       }
 
       const model =
-        (options.getStore().get("integrations.lightssOpenAIAudioDirectorModel") || DEFAULT_AUDIO_DIRECTOR_MODEL).trim() || DEFAULT_AUDIO_DIRECTOR_MODEL;
+        (
+          options.getStore().get<"integrations.lightssOpenAIAudioDirectorModel", string>("integrations.lightssOpenAIAudioDirectorModel") ||
+          DEFAULT_AUDIO_DIRECTOR_MODEL
+        ).trim() || DEFAULT_AUDIO_DIRECTOR_MODEL;
       const maxActions = clampNumber(request.body.maxActions, 1, 8, 5);
       const context = buildAudioDirectorContext();
       const openAiResponse = await postJson<JsonValue>(
