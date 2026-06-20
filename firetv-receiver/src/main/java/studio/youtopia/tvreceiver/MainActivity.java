@@ -3,25 +3,29 @@ package studio.youtopia.tvreceiver;
 import android.app.Activity;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
     private static final String TV_URL = "http://10.27.27.96:9863/tv";
-    private static final String CONTROL_URL = "http://10.27.27.96:9863/tv/control";
+    // Remote keys reach the PIN-protected /tv/control endpoint via the page's JS bridge
+    // (window.youtopiaTvControl), so the native shell no longer POSTs to it directly.
+    private static final long RECONNECT_DELAY_MS = 4000L;
 
     private WebView webView;
     private boolean reloadOnResume;
+    private final Handler reconnectHandler = new Handler(Looper.getMainLooper());
+    private boolean reconnectScheduled;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +39,8 @@ public final class MainActivity extends Activity {
         webView.setKeepScreenOn(true);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
+        // Hardware layer keeps the canvas VU/visualizer loop smooth on Fire TV GPUs.
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -45,23 +51,76 @@ public final class MainActivity extends Activity {
         settings.setUseWideViewPort(true);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         webView.setWebChromeClient(new WebChromeClient());
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                // Only react to main-frame failures (the companion server being down or
+                // restarting). Sub-resource errors must not trigger a full reload loop.
+                if (request != null && request.isForMainFrame()) {
+                    scheduleReconnect();
+                }
+                super.onReceivedError(view, request, error);
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                cancelReconnect();
+            }
+        });
         setContentView(webView);
 
         enterImmersiveMode();
+        webView.requestFocus();
         webView.loadUrl(TV_URL);
+    }
+
+    private void scheduleReconnect() {
+        if (reconnectScheduled) {
+            return;
+        }
+        reconnectScheduled = true;
+        reconnectHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                reconnectScheduled = false;
+                if (webView != null) {
+                    webView.loadUrl(TV_URL);
+                }
+            }
+        }, RECONNECT_DELAY_MS);
+    }
+
+    private void cancelReconnect() {
+        reconnectScheduled = false;
+        reconnectHandler.removeCallbacksAndMessages(null);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         enterImmersiveMode();
+        if (webView != null) {
+            webView.onResume();
+            webView.resumeTimers();
+        }
         if (reloadOnResume && webView != null) {
             reloadOnResume = false;
             webView.loadUrl(TV_URL);
         }
+    }
+
+    @Override
+    protected void onPause() {
+        // Pause the WebView's JS timers/rAF while backgrounded so the visualizer loop
+        // does not keep the GPU busy when the TV display is not on screen.
+        if (webView != null) {
+            webView.onPause();
+        }
+        super.onPause();
     }
 
     @Override
@@ -73,6 +132,7 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        cancelReconnect();
         disconnectTvAudio();
         if (webView != null) {
             webView.loadUrl("about:blank");
@@ -105,8 +165,14 @@ public final class MainActivity extends Activity {
             case KeyEvent.KEYCODE_CHANNEL_UP:
                 sendControl("next");
                 return true;
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                sendControl("volumeUp");
+                return true;
+            case KeyEvent.KEYCODE_MEDIA_REWIND:
+                sendControl("volumeDown");
+                return true;
             case KeyEvent.KEYCODE_MENU:
-                webView.reload();
+                reloadTv();
                 return true;
             default:
                 return super.dispatchKeyEvent(event);
@@ -135,34 +201,43 @@ public final class MainActivity extends Activity {
         );
     }
 
+    // Remote keys are dispatched through the TV page's JS bridge (window.youtopiaTvControl)
+    // rather than a direct POST to /tv/control. The control endpoint is PIN-protected, and
+    // the page already owns the cached PIN (header + on-screen PIN gate), so routing through
+    // it keeps native remote keys working without duplicating auth state in the native shell.
     private void sendControl(final String command) {
-        new Thread(new Runnable() {
+        if (webView == null) {
+            return;
+        }
+
+        final String safeCommand = command.replace("'", "");
+        webView.post(new Runnable() {
             @Override
             public void run() {
-                HttpURLConnection connection = null;
-                try {
-                    byte[] body = ("{\"command\":\"" + command + "\"}").getBytes(StandardCharsets.UTF_8);
-                    URL url = new URL(CONTROL_URL);
-                    connection = (HttpURLConnection) url.openConnection();
-                    connection.setConnectTimeout(1200);
-                    connection.setReadTimeout(1200);
-                    connection.setRequestMethod("POST");
-                    connection.setRequestProperty("Content-Type", "application/json");
-                    connection.setDoOutput(true);
+                if (webView == null) {
+                    return;
+                }
+                webView.evaluateJavascript(
+                    "(function(){if(window.youtopiaTvControl){window.youtopiaTvControl('" + safeCommand + "');}})();",
+                    null
+                );
+            }
+        });
+    }
 
-                    OutputStream outputStream = connection.getOutputStream();
-                    outputStream.write(body);
-                    outputStream.close();
-                    connection.getResponseCode();
-                } catch (Exception ignored) {
-                    // The WebView controls remain usable if a native remote key POST fails.
-                } finally {
-                    if (connection != null) {
-                        connection.disconnect();
-                    }
+    private void reloadTv() {
+        if (webView == null) {
+            return;
+        }
+
+        webView.post(new Runnable() {
+            @Override
+            public void run() {
+                if (webView != null) {
+                    webView.loadUrl(TV_URL);
                 }
             }
-        }).start();
+        });
     }
 
     private void disconnectTvAudio() {

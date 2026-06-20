@@ -19,6 +19,7 @@ import log from "electron-log";
 import { isDefinedAPIError } from "./api-shared/errors";
 import { getLatestTvAudioProfile, getTvDisplayState } from "../../tv-display-state";
 import { createTvAudioStream, createTvProgramStream, getTvAudioStatus } from "./tv-audio-stream";
+import { addAudioAnalyzerSubscriber, removeAudioAnalyzerSubscriber } from "../../audio-analyzer-hub";
 
 const DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime-2";
 const DEFAULT_OPENAI_REALTIME_VOICE = "marin";
@@ -33,6 +34,22 @@ export default class CompanionServer implements IIntegration {
   private ytmView: BrowserView;
   private storeListener: () => void | null = null;
   private activeTvAudioStop: (() => void) | null = null;
+  private tvEventClients = 0;
+
+  private addTvAudioAnalyzerClient(): void {
+    this.tvEventClients += 1;
+    if (this.tvEventClients === 1) {
+      addAudioAnalyzerSubscriber("tv");
+    }
+  }
+
+  private removeTvAudioAnalyzerClient(): void {
+    if (this.tvEventClients === 0) return;
+    this.tvEventClients -= 1;
+    if (this.tvEventClients === 0) {
+      removeAudioAnalyzerSubscriber("tv");
+    }
+  }
 
   private getOpenAIApiKey(): string | null {
     const storeKey = (this.store.get("integrations.lightssOpenAIApiKey") as string | null)?.trim();
@@ -164,12 +181,23 @@ export default class CompanionServer implements IIntegration {
       });
       reply.raw.write(`data: ${JSON.stringify(getTvDisplayState())}\n\n`);
 
+      // A connected TV display must keep the YTM audio analyzer running on its own,
+      // independent of the desktop VU meter toggle, or the TV VU meter stays dead.
+      this.addTvAudioAnalyzerClient();
+      let analyzerClientReleased = false;
+      const releaseAnalyzerClient = () => {
+        if (analyzerClientReleased) return;
+        analyzerClientReleased = true;
+        this.removeTvAudioAnalyzerClient();
+      };
+
       const interval = setInterval(() => {
         reply.raw.write(`data: ${JSON.stringify(getTvDisplayState())}\n\n`);
       }, 66);
 
       request.raw.on("close", () => {
         clearInterval(interval);
+        releaseAnalyzerClient();
       });
     });
     this.fastifyServer.get("/tv/audio/status", (_request, reply) => {
@@ -411,6 +439,10 @@ export default class CompanionServer implements IIntegration {
       if (this.storeListener) {
         this.storeListener();
       }
+    }
+    if (this.tvEventClients > 0) {
+      this.tvEventClients = 0;
+      removeAudioAnalyzerSubscriber("tv");
     }
   }
 
@@ -1268,13 +1300,29 @@ function getTvDisplayHtml(): string {
 	    document.querySelectorAll("[data-command]").forEach(button => {
 	      button.addEventListener("click", () => sendTvControl(button.dataset.command));
 	    });
+	    // Bridge for the native Fire TV WebView shell: remote keys route through here so
+	    // they reuse the PIN-aware control path (header + PIN gate) instead of issuing
+	    // unauthenticated POSTs that the PIN-protected endpoint now rejects.
+	    window.youtopiaTvControl = function (command) {
+	      const allowed = ["playPause", "previous", "next", "volumeUp", "volumeDown", "toggleLike"];
+	      if (allowed.indexOf(String(command)) !== -1) sendTvControl(String(command));
+	    };
 	    audioStatusTimer = setInterval(syncTvAudioStatus, 5000);
 	    syncTvAudioStatus();
+	    function shapeBin(raw) {
+	      // Byte FFT energy clusters in the low bins, leaving the upper meter near zero.
+	      // A gentle perceptual curve plus modest makeup gain lets the whole meter track
+	      // the music without turning quiet passages into a wall of full bars.
+	      const norm = Math.max(0, Math.min(1, raw / 255));
+	      const shaped = Math.pow(norm, 0.62) * 1.18;
+	      return Math.max(0, Math.min(1, shaped)) * 255;
+	    }
 	    function render() {
 	      const state = latestState;
 	      const live = Boolean(state && state.audio.live && Date.now() - lastEventAt < 1500);
 	      bars.forEach((bar, index) => {
-	        const target = live && targetBins.length ? targetBins[Math.min(targetBins.length - 1, Math.floor(index * targetBins.length / bars.length))] : 20 + ((index % 8) * 7);
+	        const rawTarget = live && targetBins.length ? targetBins[Math.min(targetBins.length - 1, Math.floor(index * targetBins.length / bars.length))] : 20 + ((index % 8) * 7);
+	        const target = live ? shapeBin(rawTarget) : rawTarget;
 	        const smoothing = target > displayBins[index] ? VU_SMOOTHING_ATTACK : VU_SMOOTHING_RELEASE;
 	        displayBins[index] += (target - displayBins[index]) * smoothing;
 	        const level = Math.max(4, Math.round((displayBins[index] / 255) * 100));
