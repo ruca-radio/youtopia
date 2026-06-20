@@ -572,7 +572,7 @@ export default class LightssIntegration implements IIntegration {
   private async requestSketchPlan(state: PlayerState): Promise<AiLightshowPlan | null> {
     const provider = this.getSketchAiProvider();
     const context = this.buildSketchContext(state);
-    const albumArtUrl = this.getBestThumbnailUrl(state.videoDetails?.thumbnails);
+    const albumArtUrl = context.song.albumArtUrl;
     const visionEnabled = Boolean(this.store.get("integrations.lightssVisionEnabled") ?? true);
     const imageUrl = visionEnabled && albumArtUrl && VISION_CAPABLE_PROVIDERS.includes(provider.provider) ? albumArtUrl : undefined;
 
@@ -941,8 +941,8 @@ export default class LightssIntegration implements IIntegration {
         },
         steps: {
           type: "array",
-          minItems: 4,
-          maxItems: 4,
+          minItems: AI_PLAN_STEP_COUNT,
+          maxItems: AI_PLAN_STEP_COUNT,
           items: {
             type: "object",
             additionalProperties: false,
