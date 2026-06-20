@@ -1,0 +1,61 @@
+[Unit]
+Description=YouTopia Intelligent Music Server
+Documentation=https://github.com/ruca-radio/youtopia
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=youtopia
+Group=youtopia
+WorkingDirectory=/opt/youtopia-server
+
+# Config file path (optional — defaults to ./youtopia-server.json)
+# Environment=YOUTOPIA_CONFIG_PATH=/etc/youtopia/server.json
+
+# Port and host
+Environment=YOUTOPIA_PORT=9870
+Environment=YOUTOPIA_HOST=0.0.0.0
+
+# Override JWT secret in production — do NOT leave as default
+# EnvironmentFile=/etc/youtopia/secrets.env  ← put YOUTOPIA_JWT_SECRET here
+
+# Data directory for SQLite / cache
+Environment=YOUTOPIA_DATA_DIR=/var/lib/youtopia
+
+# LAN service addresses (match AGENTS.md; override if your LAN differs)
+Environment=YOUTOPIA_WLED_HOST=10.27.27.110
+Environment=YOUTOPIA_OLLAMA_URL=http://10.27.27.10:11434
+Environment=YOUTOPIA_OLLAMA_MODEL=kimi-k2.7-code:cloud
+Environment=YOUTOPIA_AI_PROVIDER=ollama
+
+# Logging
+Environment=NODE_ENV=production
+Environment=LOG_LEVEL=info
+
+# Run the compiled bundle
+ExecStart=/usr/bin/node /opt/youtopia-server/dist/index.js
+
+# Graceful shutdown — sends SIGTERM then SIGKILL after timeout
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Restart on failure (not on clean exit)
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/youtopia
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
