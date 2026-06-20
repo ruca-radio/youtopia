@@ -667,14 +667,17 @@ export default class LightssIntegration implements IIntegration {
     systemPrompt: string,
     userPrompt: string,
     schema: JsonValue,
-    schemaName: string
+    schemaName: string,
+    imageUrl?: string,
+    timeoutOverride?: number
   ): Promise<T | null> {
     const timeout =
-      provider.provider === LightssAiProvider.Ollama
+      timeoutOverride ??
+      (provider.provider === LightssAiProvider.Ollama
         ? OLLAMA_TIMEOUT_MS
         : provider.provider === LightssAiProvider.Gemini
           ? GEMINI_TIMEOUT_MS
-          : OPENAI_TIMEOUT_MS;
+          : OPENAI_TIMEOUT_MS);
 
     try {
       let response: JsonValue;
@@ -686,7 +689,9 @@ export default class LightssIntegration implements IIntegration {
             model: provider.model,
             stream: false,
             format: schema,
-            prompt: `${systemPrompt}\n\nSong Context:\n${userPrompt}`
+            prompt: imageUrl
+              ? `${systemPrompt}\n\nAlbum art URL (use as visual context): ${imageUrl}\n\nSong Context:\n${userPrompt}`
+              : `${systemPrompt}\n\nSong Context:\n${userPrompt}`
           },
           timeout
         );
@@ -702,8 +707,16 @@ export default class LightssIntegration implements IIntegration {
             model: provider.model,
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ],
+              {
+                role: "user",
+                content: imageUrl
+                  ? [
+                      { type: "text", text: userPrompt },
+                      { type: "image_url", image_url: { url: imageUrl } }
+                    ]
+                  : userPrompt
+              }
+            ] as unknown as { role: string; content: string }[],
             response_format: {
               type: "json_schema",
               json_schema: {
@@ -740,7 +753,10 @@ export default class LightssIntegration implements IIntegration {
             contents: [
               {
                 role: "user",
-                parts: [{ text: `System Instructions:\n${systemPrompt}\n\nSong Context:\n${userPrompt}` }]
+                parts: [
+                  { text: `System Instructions:\n${systemPrompt}\n\nSong Context:\n${userPrompt}` },
+                  ...(imageUrl ? [{ fileUri: imageUrl, mimeType: "image/jpeg" as const }] : [])
+                ]
               }
             ],
             generationConfig: {
@@ -774,7 +790,7 @@ export default class LightssIntegration implements IIntegration {
               },
               {
                 role: "user",
-                content: [{ type: "input_text", text: userPrompt }]
+                content: [{ type: "input_text", text: userPrompt }, ...(imageUrl ? [{ type: "input_image", image_url: imageUrl }] : [])]
               }
             ],
             text: {
