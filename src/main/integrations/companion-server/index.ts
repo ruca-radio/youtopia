@@ -519,7 +519,18 @@ function getTvDisplayHtml(): string {
 	      --vu-high: #ef4444;
 	    }
 	    * { box-sizing: border-box; }
-	    body { margin: 0; height: 100vh; overflow: hidden; background: #000000; color: #f1f1f1; }
+	    body { margin: 0; height: 100vh; overflow: hidden; background: #000000; color: #f1f1f1; cursor: none; }
+	    body.hud-visible { cursor: default; }
+	    body.hud-idle .audio-panel,
+	    body.hud-idle .transport-panel {
+	      opacity: 0;
+	      transform: translateY(12px);
+	      pointer-events: none;
+	    }
+	    body.hud-idle .message,
+	    body.hud-idle .ticker {
+	      opacity: .18;
+	    }
 	    body[data-font="display"] { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", Inter, sans-serif; }
 	    body[data-font="mono"] { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; }
 	    .album-art-backdrop {
@@ -578,9 +589,15 @@ function getTvDisplayHtml(): string {
     .bottom { display: grid; gap: 12px; }
     .progress { height: 8px; border-radius: 999px; background: rgba(255,255,255,.10); overflow: hidden; }
     .progress span { display: block; height: 100%; width: 0%; border-radius: inherit; background: var(--accent); transition: width 250ms linear; }
-    .control-row { display: flex; align-items: center; gap: 9px; min-height: 42px; }
-    .audio-panel { color: #d8d8d8; }
-    .audio-panel audio { display: none; }
+	    .control-row { display: flex; align-items: center; gap: 9px; min-height: 42px; }
+	    .audio-panel { color: #d8d8d8; }
+	    .audio-panel audio { display: none; }
+	    .audio-panel,
+	    .transport-panel,
+	    .message,
+	    .ticker {
+	      transition: opacity 420ms ease, transform 420ms ease;
+	    }
     .icon-button { appearance: none; width: 42px; height: 42px; display: inline-grid; place-items: center; flex: 0 0 auto; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.065); color: #f5f5f5; font: inherit; line-height: 0; }
     .icon-button svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; }
     .icon-button:focus { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -644,6 +661,10 @@ function getTvDisplayHtml(): string {
     body[data-album-art-mode="ambient"] .album-art,
     body[data-album-art-mode="hero"] .album-art { opacity: .92; transform: translateY(0) scale(1); }
     body[data-album-art-mode="hero"] .album-art { width: clamp(170px, 22vw, 310px); top: 50%; transform: translateY(-50%) scale(1); opacity: .95; }
+    body[data-tv-layout="ambient"] .track-copy { opacity: .72; }
+    body[data-tv-layout="artHero"] .track-copy { max-width: 58vw; }
+    body[data-tv-layout="lowHud"] main { grid-template-rows: auto 1fr auto; }
+    body[data-tv-focus="albumArt"] .album-art { opacity: .98; }
     @media (max-width: 780px) {
       main { padding: 22px; }
       .top { grid-template-columns: 1fr; }
@@ -908,6 +929,13 @@ function getTvDisplayHtml(): string {
 	    function safeHex(value, fallback) {
 	      return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
 	    }
+	    function hexToRgba(hex, alpha) {
+	      const safe = safeHex(hex, "#ffffff").replace("#", "");
+	      const r = parseInt(safe.slice(0, 2), 16);
+	      const g = parseInt(safe.slice(2, 4), 16);
+	      const b = parseInt(safe.slice(4, 6), 16);
+	      return "rgba(" + r + "," + g + "," + b + "," + Math.max(0, Math.min(1, alpha)) + ")";
+	    }
 	    function clamp01(value) {
 	      return Math.min(1, Math.max(0, value));
 	    }
@@ -970,7 +998,42 @@ function getTvDisplayHtml(): string {
 	      const seedStr =
 	        backgroundStyle + "|" + visualizerStyle + "|" + vuStyle + "|" + albumArtMode + "|" + motion + "|" + density + "|" + intensity + "|" + (state && state.player ? state.player.title + "|" + state.player.artist : "");
 	      const seed = xmur3(seedStr || stableStringify(src) || "default")();
-	      return { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed };
+	      const baseConfig = { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed };
+	      const director = deriveTvDirector(baseConfig, state);
+	      return { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed, director };
+	    }
+	    function normalizeTvDirector(input, visualConfig, state) {
+	      const src = input && typeof input === "object" ? input : {};
+	      const fallbackDirector = { objectFamily: "ribbons" };
+	      const visualizer = visualConfig.visualizerStyle;
+	      const vuStyle = visualConfig.vuStyle;
+	      let objectFamily = fallbackDirector.objectFamily;
+	      if (src.objectFamily === "halos" || src.objectFamily === "orbits" || src.objectFamily === "spectrumField" || src.objectFamily === "albumGlow" || src.objectFamily === "minimal") {
+	        objectFamily = src.objectFamily;
+	      } else if (visualizer === "spectrumLine") {
+	        objectFamily = "spectrumField";
+	      } else if (vuStyle === "albumGlow" || visualConfig.albumArtMode === "ambient") {
+	        objectFamily = "albumGlow";
+	      } else if (visualConfig.density > 72) {
+	        objectFamily = "orbits";
+	      } else if (visualConfig.intensity > 0.72) {
+	        objectFamily = "halos";
+	      }
+
+	      let layout = src.layout === "ambient" || src.layout === "artHero" || src.layout === "lowHud" ? src.layout : "standard";
+	      if (visualConfig.albumArtMode === "hero") layout = "artHero";
+	      if (objectFamily === "minimal") layout = "ambient";
+
+	      const focus = src.focus === "albumArt" || src.focus === "visualizer" || src.focus === "caption" ? src.focus : "track";
+	      const hudMode = src.hudMode === "visible" || src.hudMode === "ambient" ? src.hudMode : "transient";
+	      const density = typeof src.density === "number" ? Math.max(0, Math.min(100, Math.round(src.density))) : visualConfig.density;
+	      const intensitySource = typeof src.intensity === "number" ? src.intensity : Math.round(visualConfig.intensity * 100);
+	      const intensity = Math.max(0, Math.min(78, Math.round(intensitySource)));
+	      const isPlaying = Boolean(state && state.player && state.player.isPlaying);
+	      return { objectFamily, layout, focus, hudMode, density, intensity, isPlaying };
+	    }
+	    function deriveTvDirector(visualConfig, state) {
+	      return normalizeTvDirector(null, visualConfig, state);
 	    }
 	    function initScene(config) {
 	      const rand = mulberry32(config.seed);
@@ -1007,6 +1070,9 @@ function getTvDisplayHtml(): string {
 	      document.body.dataset.vuStyle = config.vuStyle;
 	      document.body.dataset.albumArtMode = config.albumArtMode;
 	      document.body.dataset.backgroundStyle = config.backgroundStyle;
+	      document.body.dataset.tvObjectFamily = config.director.objectFamily;
+	      document.body.dataset.tvLayout = config.director.layout;
+	      document.body.dataset.tvFocus = config.director.focus;
 	    }
 	    function applyDisplayTheme(theme) {
 	      if (!theme) return;
@@ -1373,6 +1439,55 @@ function getTvDisplayHtml(): string {
 	        v.addColorStop(1, "rgba(0,0,0,0.55)");
 	        ctx.fillStyle = v;
 	        ctx.fillRect(0, 0, canvasW, canvasH);
+
+	        const director = cfg.director || deriveTvDirector(cfg, state);
+	        const objectFamily = director.objectFamily;
+	        const directorIntensity = clamp01(director.intensity / 100);
+	        if (objectFamily === "halos" || objectFamily === "albumGlow") {
+	          const haloCount = objectFamily === "albumGlow" ? 2 : 3;
+	          ctx.globalCompositeOperation = "screen";
+	          for (let i = 0; i < haloCount; i++) {
+	            const cx = canvasW * (0.5 + Math.sin(t * cfg.speed * 0.18 + i) * 0.12);
+	            const cy = canvasH * (0.48 + Math.cos(t * cfg.speed * 0.15 + i * 1.7) * 0.10);
+	            const radius = Math.min(canvasW, canvasH) * (0.24 + i * 0.12 + sceneEnergy * 0.05);
+	            const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+	            hg.addColorStop(0, i % 2 ? hexToRgba(cfg.secondary, 0.10 * directorIntensity) : hexToRgba(cfg.primary, 0.10 * directorIntensity));
+	            hg.addColorStop(1, "rgba(0,0,0,0)");
+	            ctx.fillStyle = hg;
+	            ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+	          }
+	        }
+	        if (objectFamily === "orbits") {
+	          ctx.globalCompositeOperation = "screen";
+	          const orbitCount = Math.round(lerp(8, 26, director.density / 100));
+	          for (let i = 0; i < orbitCount; i++) {
+	            const angle = (i / orbitCount) * Math.PI * 2 + t * cfg.speed * 0.12;
+	            const radius = Math.min(canvasW, canvasH) * (0.18 + (i % 5) * 0.055);
+	            const px = canvasW * 0.5 + Math.cos(angle) * radius * 1.8;
+	            const py = canvasH * 0.52 + Math.sin(angle * 0.72) * radius;
+	            ctx.fillStyle = i % 2 ? hexToRgba(cfg.secondary, 0.13 * directorIntensity) : hexToRgba(cfg.primary, 0.13 * directorIntensity);
+	            ctx.beginPath();
+	            ctx.arc(px, py, Math.max(2.4 * dpr, 5 * dpr * lerp(0.7, 1.25, sceneEnergy)), 0, Math.PI * 2);
+	            ctx.fill();
+	          }
+	        }
+	        if (objectFamily === "spectrumField" && live && targetBins.length) {
+	          ctx.globalCompositeOperation = "screen";
+	          const rows = 3;
+	          for (let row = 0; row < rows; row++) {
+	            ctx.beginPath();
+	            for (let i = 0; i < displayBins.length; i++) {
+	              const x = (i / Math.max(1, displayBins.length - 1)) * canvasW;
+	              const level = displayBins[i] / 255;
+	              const y = canvasH * (0.38 + row * 0.13) - level * canvasH * (0.10 + row * 0.025);
+	              if (i === 0) ctx.moveTo(x, y);
+	              else ctx.lineTo(x, y);
+	            }
+	            ctx.strokeStyle = row % 2 ? hexToRgba(cfg.secondary, 0.11 * directorIntensity) : hexToRgba(cfg.accent, 0.16 * directorIntensity);
+	            ctx.lineWidth = Math.max(1.2, (2 + row) * dpr);
+	            ctx.stroke();
+	          }
+	        }
 
 	        // Ribbons: slow-moving sine bands. Designed to avoid strobe/blink effects.
 	        const speed = cfg.speed * 0.55;
