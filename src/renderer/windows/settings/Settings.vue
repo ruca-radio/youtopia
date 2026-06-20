@@ -92,8 +92,38 @@ const lightssOpenRouterModel = ref<string>(integrations.lightssOpenRouterModel ?
 const lightssOpenRouterApiKey = ref<string | null>(integrations.lightssOpenRouterApiKey ?? null);
 const lightssOllamaBaseUrl = ref<string>(integrations.lightssOllamaBaseUrl ?? "http://10.27.27.10:11434");
 const lightssOllamaModel = ref<string>(integrations.lightssOllamaModel ?? "kimi-k2.7-code:cloud");
+const lightssGeminiApiKey = ref<string | null>(integrations.lightssGeminiApiKey ?? null);
+const lightssGeminiModel = ref<string>(integrations.lightssGeminiModel ?? "gemini-2.5-flash");
+const lightssGeminiBaseUrl = ref<string>(integrations.lightssGeminiBaseUrl ?? "https://generativelanguage.googleapis.com/v1beta");
+const lightssLyriaEnabled = ref<boolean>(integrations.lightssLyriaEnabled ?? false);
+const lightssLyriaPrompt = ref<string | null>(integrations.lightssLyriaPrompt ?? null);
+const lightssDjVoiceEnabled = ref<boolean>(integrations.lightssDjVoiceEnabled ?? false);
+const lightssDjVoiceModel = ref<string>(integrations.lightssDjVoiceModel ?? "en-US-Journey-F");
+const lightssDjVoicePrompt = ref<string | null>(integrations.lightssDjVoicePrompt ?? null);
 const lightssBridgePath = ref<string | null>(integrations.lightssBridgePath ?? null);
 const lightssPythonPath = ref<string | null>(integrations.lightssPythonPath ?? null);
+const lightssWledPrompt = ref<string | null>(integrations.lightssWledPrompt ?? null);
+const lightssCanvasPrompt = ref<string | null>(integrations.lightssCanvasPrompt ?? null);
+const lightssHostPrompt = ref<string | null>(integrations.lightssHostPrompt ?? null);
+const lightssWledProvider = ref<LightssAiProvider>(integrations.lightssWledProvider ?? LightssAiProvider.Ollama);
+const lightssWledModel = ref<string>(integrations.lightssWledModel ?? "kimi-k2.7-code:cloud");
+const lightssCanvasProvider = ref<LightssAiProvider>(integrations.lightssCanvasProvider ?? LightssAiProvider.Gemini);
+const lightssCanvasModel = ref<string>(integrations.lightssCanvasModel ?? "gemini-2.5-flash");
+const lightssHostProvider = ref<LightssAiProvider>(integrations.lightssHostProvider ?? LightssAiProvider.Gemini);
+const lightssHostModel = ref<string>(integrations.lightssHostModel ?? "gemini-2.5-flash");
+const lightssAnalystProvider = ref<LightssAiProvider>(integrations.lightssAnalystProvider ?? LightssAiProvider.Gemini);
+const lightssAnalystModel = ref<string>(integrations.lightssAnalystModel ?? "gemini-2.5-flash");
+const lightssAnalystPrompt = ref<string | null>(integrations.lightssAnalystPrompt ?? null);
+const lightssSketchProvider = ref<LightssAiProvider>(integrations.lightssSketchProvider ?? LightssAiProvider.Gemini);
+const lightssSketchModel = ref<string>(integrations.lightssSketchModel ?? "gemini-2.5-flash");
+const lightssVisionEnabled = ref<boolean>(integrations.lightssVisionEnabled ?? true);
+const stepIntervalSecs = ref<number>((integrations.lightssStepIntervalMs ?? 7000) / 1000);
+
+const audioCompressorEnabled = ref<boolean>(integrations.audioCompressorEnabled ?? true);
+const audioCompressorThreshold = ref<number>(integrations.audioCompressorThreshold ?? -24);
+const audioCompressorRatio = ref<number>(integrations.audioCompressorRatio ?? 12);
+const audioCompressorAttack = ref<number>(integrations.audioCompressorAttack ?? 0.003);
+const audioCompressorRelease = ref<number>(integrations.audioCompressorRelease ?? 0.25);
 
 const shortcutPlayPause = ref<string>(shortcuts.playPause);
 const shortcutNext = ref<string>(shortcuts.next);
@@ -153,8 +183,37 @@ store.onDidAnyChange(async newState => {
   lightssOpenRouterApiKey.value = newState.integrations.lightssOpenRouterApiKey ?? null;
   lightssOllamaBaseUrl.value = newState.integrations.lightssOllamaBaseUrl ?? "http://10.27.27.10:11434";
   lightssOllamaModel.value = newState.integrations.lightssOllamaModel ?? "kimi-k2.7-code:cloud";
+  lightssGeminiApiKey.value = newState.integrations.lightssGeminiApiKey ?? null;
+  lightssGeminiModel.value = newState.integrations.lightssGeminiModel ?? "gemini-2.5-flash";
+  lightssGeminiBaseUrl.value = newState.integrations.lightssGeminiBaseUrl ?? "https://generativelanguage.googleapis.com/v1beta";
+  lightssLyriaEnabled.value = newState.integrations.lightssLyriaEnabled ?? false;
+  lightssLyriaPrompt.value = newState.integrations.lightssLyriaPrompt ?? null;
+  lightssDjVoiceEnabled.value = newState.integrations.lightssDjVoiceEnabled ?? false;
+  lightssDjVoiceModel.value = newState.integrations.lightssDjVoiceModel ?? "en-US-Journey-F";
+  lightssDjVoicePrompt.value = newState.integrations.lightssDjVoicePrompt ?? null;
   lightssBridgePath.value = newState.integrations.lightssBridgePath ?? null;
   lightssPythonPath.value = newState.integrations.lightssPythonPath ?? null;
+  lightssWledPrompt.value = newState.integrations.lightssWledPrompt ?? null;
+  lightssCanvasPrompt.value = newState.integrations.lightssCanvasPrompt ?? null;
+  lightssHostPrompt.value = newState.integrations.lightssHostPrompt ?? null;
+  lightssWledProvider.value = newState.integrations.lightssWledProvider ?? LightssAiProvider.Ollama;
+  lightssWledModel.value = newState.integrations.lightssWledModel ?? "kimi-k2.7-code:cloud";
+  lightssCanvasProvider.value = newState.integrations.lightssCanvasProvider ?? LightssAiProvider.Gemini;
+  lightssCanvasModel.value = newState.integrations.lightssCanvasModel ?? "gemini-2.5-flash";
+  lightssHostProvider.value = newState.integrations.lightssHostProvider ?? LightssAiProvider.Gemini;
+  lightssHostModel.value = newState.integrations.lightssHostModel ?? "gemini-2.5-flash";
+  lightssAnalystProvider.value = newState.integrations.lightssAnalystProvider ?? LightssAiProvider.Gemini;
+  lightssAnalystModel.value = newState.integrations.lightssAnalystModel ?? "gemini-2.5-flash";
+  lightssAnalystPrompt.value = newState.integrations.lightssAnalystPrompt ?? null;
+  lightssSketchProvider.value = newState.integrations.lightssSketchProvider ?? LightssAiProvider.Gemini;
+  lightssSketchModel.value = newState.integrations.lightssSketchModel ?? "gemini-2.5-flash";
+  lightssVisionEnabled.value = newState.integrations.lightssVisionEnabled ?? true;
+  stepIntervalSecs.value = (newState.integrations.lightssStepIntervalMs ?? 7000) / 1000;
+  audioCompressorEnabled.value = newState.integrations.audioCompressorEnabled ?? true;
+  audioCompressorThreshold.value = newState.integrations.audioCompressorThreshold ?? -24;
+  audioCompressorRatio.value = newState.integrations.audioCompressorRatio ?? 12;
+  audioCompressorAttack.value = newState.integrations.audioCompressorAttack ?? 0.003;
+  audioCompressorRelease.value = newState.integrations.audioCompressorRelease ?? 0.25;
   lastFMSessionKey.value = newState.lastfm.sessionKey;
   scrobblePercent.value = newState.lastfm.scrobblePercent;
 
@@ -245,8 +304,37 @@ async function settingsChanged() {
   store.set("integrations.lightssOpenRouterApiKey", lightssOpenRouterApiKey.value?.trim() || null);
   store.set("integrations.lightssOllamaBaseUrl", lightssOllamaBaseUrl.value);
   store.set("integrations.lightssOllamaModel", lightssOllamaModel.value);
+  store.set("integrations.lightssGeminiApiKey", lightssGeminiApiKey.value?.trim() || null);
+  store.set("integrations.lightssGeminiModel", lightssGeminiModel.value);
+  store.set("integrations.lightssGeminiBaseUrl", lightssGeminiBaseUrl.value);
+  store.set("integrations.lightssLyriaEnabled", lightssLyriaEnabled.value);
+  store.set("integrations.lightssLyriaPrompt", lightssLyriaPrompt.value);
+  store.set("integrations.lightssDjVoiceEnabled", lightssDjVoiceEnabled.value);
+  store.set("integrations.lightssDjVoiceModel", lightssDjVoiceModel.value);
+  store.set("integrations.lightssDjVoicePrompt", lightssDjVoicePrompt.value);
   store.set("integrations.lightssBridgePath", lightssBridgePath.value);
   store.set("integrations.lightssPythonPath", lightssPythonPath.value);
+  store.set("integrations.lightssWledPrompt", lightssWledPrompt.value);
+  store.set("integrations.lightssCanvasPrompt", lightssCanvasPrompt.value);
+  store.set("integrations.lightssHostPrompt", lightssHostPrompt.value);
+  store.set("integrations.lightssWledProvider", lightssWledProvider.value);
+  store.set("integrations.lightssWledModel", lightssWledModel.value);
+  store.set("integrations.lightssCanvasProvider", lightssCanvasProvider.value);
+  store.set("integrations.lightssCanvasModel", lightssCanvasModel.value);
+  store.set("integrations.lightssHostProvider", lightssHostProvider.value);
+  store.set("integrations.lightssHostModel", lightssHostModel.value);
+  store.set("integrations.lightssAnalystProvider", lightssAnalystProvider.value);
+  store.set("integrations.lightssAnalystModel", lightssAnalystModel.value);
+  store.set("integrations.lightssAnalystPrompt", lightssAnalystPrompt.value);
+  store.set("integrations.lightssSketchProvider", lightssSketchProvider.value);
+  store.set("integrations.lightssSketchModel", lightssSketchModel.value);
+  store.set("integrations.lightssVisionEnabled", lightssVisionEnabled.value);
+  store.set("integrations.lightssStepIntervalMs", Math.round(stepIntervalSecs.value) * 1000);
+  store.set("integrations.audioCompressorEnabled", audioCompressorEnabled.value);
+  store.set("integrations.audioCompressorThreshold", audioCompressorThreshold.value);
+  store.set("integrations.audioCompressorRatio", audioCompressorRatio.value);
+  store.set("integrations.audioCompressorAttack", audioCompressorAttack.value);
+  store.set("integrations.audioCompressorRelease", audioCompressorRelease.value);
   store.set("lastfm.scrobblePercent", scrobblePercent.value);
 
   store.set("shortcuts.playPause", shortcutPlayPause.value);
@@ -256,6 +344,138 @@ async function settingsChanged() {
   store.set("shortcuts.thumbsDown", shortcutThumbsDown.value);
   store.set("shortcuts.volumeUp", shortcutVolumeUp.value);
   store.set("shortcuts.volumeDown", shortcutVolumeDown.value);
+}
+
+const isImproving = ref<Record<string, boolean>>({
+  wled: false,
+  canvas: false,
+  host: false,
+  analyst: false,
+  lyria: false,
+  dj: false
+});
+
+async function improvePrompt(field: "wled" | "canvas" | "host" | "analyst" | "lyria" | "dj") {
+  let currentPrompt = "";
+  if (field === "wled") currentPrompt = lightssWledPrompt.value || "";
+  else if (field === "canvas") currentPrompt = lightssCanvasPrompt.value || "";
+  else if (field === "host") currentPrompt = lightssHostPrompt.value || "";
+  else if (field === "analyst") currentPrompt = lightssAnalystPrompt.value || "";
+  else if (field === "lyria") currentPrompt = lightssLyriaPrompt.value || "";
+  else if (field === "dj") currentPrompt = lightssDjVoicePrompt.value || "";
+
+  if (!currentPrompt.trim()) {
+    alert("Please enter a base prompt first so we can improve it!");
+    return;
+  }
+
+  isImproving.value[field] = true;
+
+  const improveInstruction = `You are an expert prompt engineer. Revise, refine, and improve the following agent system prompt to make it highly descriptive, detailed, premium, and effective for an AI system.
+CRITICAL rules you must preserve:
+- For WLED: MUST keep rules about absolutely no strobing, flashing, blinking. Long transitions (transitionMs >= 900) are required. Use only safe effect and palette IDs.
+- For TV Canvas: MUST keep rules about keeping background true black (#000000) for screen protection and maximum contrast, and absolutely no strobing or flashing. Colors must be elegant.
+- For Scrolling/VJ: Keep late-night VJ personality, concise fact/commentary lines under 140 characters.
+
+Return ONLY the final revised and improved prompt text. Do NOT add conversational filler, do NOT add introductory or concluding remarks, do NOT wrap the output in quotes. Return the plain text prompt directly.
+
+Here is the prompt to improve:
+"${currentPrompt}"`;
+
+  try {
+    let improvedText = "";
+    const provider = lightssAiProvider.value;
+
+    if (provider === LightssAiProvider.Ollama) {
+      const url = `${lightssOllamaBaseUrl.value}/api/generate`;
+      const response = await window.fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: lightssOllamaModel.value,
+          prompt: improveInstruction,
+          stream: false
+        })
+      });
+      if (!response.ok) throw new Error(`Ollama API error: ${response.statusText}`);
+      const data = await response.json();
+      improvedText = data.response || data.text || "";
+    } else if (provider === LightssAiProvider.OpenAI) {
+      const apiKey = lightssOpenAIApiKey.value || "";
+      const url = "https://api.openai.com/v1/chat/completions";
+      const response = await window.fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: lightssOpenAIModel.value,
+          messages: [{ role: "user", content: improveInstruction }],
+          temperature: 0.7
+        })
+      });
+      if (!response.ok) throw new Error(`OpenAI API error: ${response.statusText}`);
+      const data = await response.json();
+      improvedText = data.choices?.[0]?.message?.content || "";
+    } else if (provider === LightssAiProvider.OpenRouter) {
+      const apiKey = lightssOpenRouterApiKey.value || "";
+      const url = "https://openrouter.ai/v1/chat/completions";
+      const response = await window.fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: lightssOpenRouterModel.value,
+          messages: [{ role: "user", content: improveInstruction }],
+          temperature: 0.7
+        })
+      });
+      if (!response.ok) throw new Error(`OpenRouter API error: ${response.statusText}`);
+      const data = await response.json();
+      improvedText = data.choices?.[0]?.message?.content || "";
+    } else if (provider === LightssAiProvider.Gemini) {
+      const apiKey = lightssGeminiApiKey.value || "";
+      const url = `${lightssGeminiBaseUrl.value}/models/${lightssGeminiModel.value}:generateContent?key=${apiKey}`;
+      const response = await window.fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: improveInstruction }]
+            }
+          ]
+        })
+      });
+      if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+      const data = await response.json();
+      improvedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+
+    improvedText = improvedText.trim();
+    if (improvedText) {
+      if (improvedText.startsWith('"') && improvedText.endsWith('"')) {
+        improvedText = improvedText.slice(1, -1).trim();
+      }
+      if (field === "wled") lightssWledPrompt.value = improvedText;
+      else if (field === "canvas") lightssCanvasPrompt.value = improvedText;
+      else if (field === "host") lightssHostPrompt.value = improvedText;
+      else if (field === "analyst") lightssAnalystPrompt.value = improvedText;
+      else if (field === "lyria") lightssLyriaPrompt.value = improvedText;
+      else if (field === "dj") lightssDjVoicePrompt.value = improvedText;
+      settingsChanged();
+    } else {
+      alert("Could not retrieve improved prompt from the AI provider. Please check model and key settings.");
+    }
+  } catch (e) {
+    console.error("Failed to improve prompt:", e);
+    alert(`Failed to improve prompt: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    isImproving.value[field] = false;
+  }
 }
 
 async function settingChangedRequiresRestart() {
@@ -362,6 +582,7 @@ window.ytmd.handleUpdateDownloaded(() => {
         <li :class="{ active: currentTab === 3 }" @click="changeTab(3)"><span class="material-symbols-outlined">music_note</span>Playback</li>
         <li :class="{ active: currentTab === 4 }" @click="changeTab(4)"><span class="material-symbols-outlined">wifi_tethering</span>Integrations</li>
         <li :class="{ active: currentTab === 5 }" @click="changeTab(5)"><span class="material-symbols-outlined">keyboard</span>Shortcuts</li>
+        <li :class="{ active: currentTab === 6 }" @click="changeTab(6)"><span class="material-symbols-outlined">psychology</span>AI & Audio</li>
         <span class="push"></span>
         <li :class="{ active: currentTab === 99 }" @click="changeTab(99)"><span class="material-symbols-outlined">info</span>About</li>
       </ul>
@@ -612,119 +833,16 @@ window.ytmd.handleUpdateDownloaded(() => {
             step="5"
             @change="settingsChanged"
           />
-          <YTMDSetting v-model="lightssEnabled" type="checkbox" name="Lightss (WLED lighting)" @change="settingsChanged" />
-          <div v-if="lightssEnabled" class="setting indented">
-            <p class="description">Control the WLED lightshow from Youtopia while music is playing.</p>
+          <div class="hint-box">
+            <span class="material-symbols-outlined hint-icon">psychology</span>
+            <div class="name-with-description">
+              <p class="name">AI & Audio settings have moved</p>
+              <p class="description">
+                Looking for WLED, AI planners, custom prompts, or the studio compressor? Head over to the dedicated AI & Audio tab in the sidebar!
+              </p>
+            </div>
+            <button @click="changeTab(6)">Go to AI & Audio</button>
           </div>
-          <YTMDSetting
-            v-if="lightssEnabled"
-            v-model="lightssReactiveEnabled"
-            type="checkbox"
-            name="Automatic lightshow"
-            description="Rotate safe non-strobe WLED effects while music is playing"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled"
-            v-model="lightssHost"
-            type="text"
-            name="WLED host"
-            description="URL of the WLED controller"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled"
-            v-model="lightssAiProvider"
-            :options-map="{ [LightssAiProvider.Ollama]: 'Ollama', [LightssAiProvider.OpenRouter]: 'OpenRouter', [LightssAiProvider.OpenAI]: 'OpenAI' }"
-            type="select"
-            name="Lightss AI provider"
-            description="Choose which AI plans the WLED lightshow"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.Ollama"
-            v-model="lightssOllamaBaseUrl"
-            type="text"
-            name="Ollama base URL"
-            description="Base URL for the Ollama-compatible planner"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.Ollama"
-            v-model="lightssOllamaModel"
-            type="text"
-            name="Ollama model"
-            description="Model used to plan WLED scenes"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenRouter"
-            v-model="lightssOpenRouterModel"
-            type="text"
-            name="OpenRouter model"
-            description="Model used to plan WLED scenes through OpenRouter"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenRouter"
-            v-model="lightssOpenRouterApiKey"
-            type="text"
-            name="OpenRouter API key"
-            description="Optional; otherwise OPENROUTER_API_KEY from the app environment is used"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
-            v-model="lightssOpenAIModel"
-            type="text"
-            name="OpenAI model"
-            description="Model used to plan WLED scenes"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
-            v-model="lightssOpenAIRealtimeModel"
-            type="text"
-            name="DJ-GPT realtime model"
-            description="Realtime voice model for the TV DJ session"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
-            v-model="lightssOpenAIRealtimeVoice"
-            type="text"
-            name="DJ-GPT voice"
-            description="Realtime voice used by the TV DJ session"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
-            v-model="lightssOpenAIAudioDirectorModel"
-            type="text"
-            name="Audio director model"
-            description="Model used for fades, sets, search planning, and playlist direction"
-            indented
-            @change="settingsChanged"
-          />
-          <YTMDSetting
-            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
-            v-model="lightssOpenAIApiKey"
-            type="text"
-            name="OpenAI API key"
-            description="Optional; otherwise OPENAI_API_KEY from the app environment is used"
-            indented
-            @change="settingsChanged"
-          />
         </div>
 
         <div v-if="currentTab === 5" class="shortcuts-tab">
@@ -804,6 +922,551 @@ window.ytmd.handleUpdateDownloaded(() => {
               >
             </p>
             <KeybindInput v-model="shortcutVolumeDown" @change="settingsChanged" />
+          </div>
+        </div>
+
+        <div v-if="currentTab === 6" class="ai-audio-tab">
+          <!-- Section 1: AI Planner Settings -->
+          <div class="settings-section">
+            <h3 class="section-title"><span class="material-symbols-outlined">psychology</span> AI Planner & WLED</h3>
+            <p class="section-subtitle">Configure AI providers, keys, endpoints, and behavioral prompts for agentic ambient lighting.</p>
+
+            <YTMDSetting v-model="lightssEnabled" type="checkbox" name="Enable Lightss Integration" @change="settingsChanged" />
+
+            <div v-if="lightssEnabled" class="settings-group">
+              <YTMDSetting
+                v-model="lightssReactiveEnabled"
+                type="checkbox"
+                name="Automatic lightshow"
+                description="Rotate safe non-strobe WLED effects while music is playing"
+                indented
+                @change="settingsChanged"
+              />
+              <YTMDSetting v-model="lightssHost" type="text" name="WLED host" description="URL of the WLED controller" indented @change="settingsChanged" />
+              <YTMDSetting
+                v-model="lightssAiProvider"
+                :options-map="{
+                  [LightssAiProvider.Ollama]: 'Ollama',
+                  [LightssAiProvider.OpenRouter]: 'OpenRouter',
+                  [LightssAiProvider.OpenAI]: 'OpenAI',
+                  [LightssAiProvider.Gemini]: 'Gemini'
+                }"
+                type="select"
+                name="Lightss AI provider"
+                description="Choose which AI plans the WLED lightshow"
+                indented
+                @change="settingsChanged"
+              />
+
+              <!-- Ollama Provider Settings -->
+              <div v-if="lightssAiProvider === LightssAiProvider.Ollama">
+                <YTMDSetting
+                  v-model="lightssOllamaBaseUrl"
+                  type="text"
+                  name="Ollama base URL"
+                  description="Base URL for the Ollama-compatible planner"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssOllamaModel"
+                  type="text"
+                  name="Ollama model"
+                  description="Model used to plan WLED scenes"
+                  indented
+                  @change="settingsChanged"
+                />
+              </div>
+
+              <!-- OpenRouter Provider Settings -->
+              <div v-if="lightssAiProvider === LightssAiProvider.OpenRouter">
+                <YTMDSetting
+                  v-model="lightssOpenRouterModel"
+                  type="text"
+                  name="OpenRouter model"
+                  description="Model used to plan WLED scenes through OpenRouter"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssOpenRouterApiKey"
+                  type="text"
+                  name="OpenRouter API key"
+                  description="Optional; otherwise OPENROUTER_API_KEY from the app environment is used"
+                  indented
+                  @change="settingsChanged"
+                />
+              </div>
+
+              <!-- OpenAI Provider Settings -->
+              <div v-if="lightssAiProvider === LightssAiProvider.OpenAI">
+                <YTMDSetting
+                  v-model="lightssOpenAIModel"
+                  type="text"
+                  name="OpenAI model"
+                  description="Model used to plan WLED scenes"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssOpenAIRealtimeModel"
+                  type="text"
+                  name="DJ-GPT realtime model"
+                  description="Realtime voice model for the TV DJ session"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssOpenAIRealtimeVoice"
+                  type="text"
+                  name="DJ-GPT voice"
+                  description="Realtime voice used by the TV DJ session"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssOpenAIAudioDirectorModel"
+                  type="text"
+                  name="Audio director model"
+                  description="Model used for fades, sets, search planning, and playlist direction"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssOpenAIApiKey"
+                  type="text"
+                  name="OpenAI API key"
+                  description="Optional; otherwise OPENAI_API_KEY from the app environment is used"
+                  indented
+                  @change="settingsChanged"
+                />
+              </div>
+
+              <!-- Gemini Provider Settings -->
+              <div v-if="lightssAiProvider === LightssAiProvider.Gemini">
+                <YTMDSetting
+                  v-model="lightssGeminiModel"
+                  type="text"
+                  name="Gemini model"
+                  description="Model used to plan WLED scenes"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssGeminiBaseUrl"
+                  type="text"
+                  name="Gemini base URL"
+                  description="Base URL for Gemini API endpoint (defaults to Google)"
+                  indented
+                  @change="settingsChanged"
+                />
+                <YTMDSetting
+                  v-model="lightssGeminiApiKey"
+                  type="text"
+                  name="Gemini API key"
+                  description="Optional; otherwise GEMINI_API_KEY from the app environment is used"
+                  indented
+                  @change="settingsChanged"
+                />
+              </div>
+
+              <!-- Agent Prompts Section -->
+              <div class="prompts-container indented">
+                <div class="prompt-header">
+                  <h4>Custom Agent Prompts</h4>
+                  <p class="prompt-desc">Fine-tune the behaviors, rules, and personalities of the agentic television setup.</p>
+                </div>
+
+                <!-- 1. Music Analyst & Coordinator Agent -->
+                <div class="agent-config-block">
+                  <h4 class="agent-title">
+                    <span class="material-symbols-outlined">insights</span>
+                    Music Analyst &amp; Coordinator Agent
+                  </h4>
+                  <p class="agent-desc">Analyzes track details, genre, and emotion to output a central visual concept that aligns the other agents.</p>
+
+                  <YTMDSetting
+                    v-model="lightssAnalystProvider"
+                    :options-map="{
+                      [LightssAiProvider.Ollama]: 'Ollama',
+                      [LightssAiProvider.OpenRouter]: 'OpenRouter',
+                      [LightssAiProvider.OpenAI]: 'OpenAI',
+                      [LightssAiProvider.Gemini]: 'Gemini'
+                    }"
+                    type="select"
+                    name="Provider"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting v-model="lightssAnalystModel" type="text" name="Model" @change="settingsChanged" />
+                  <p class="agent-desc">Provider and model are unused — only the custom prompt below applies (prepended to each agent).</p>
+
+                  <div class="prompt-field">
+                    <div class="prompt-field-header">
+                      <label for="analyst-prompt">System Prompt</label>
+                      <button
+                        class="improve-prompt-btn"
+                        :class="{ 'is-loading': isImproving.analyst }"
+                        :disabled="isImproving.analyst"
+                        title="Revise and improve prompt using active AI"
+                        @click="improvePrompt('analyst')"
+                      >
+                        <span class="material-symbols-outlined">{{ isImproving.analyst ? "sync" : "bolt" }}</span>
+                        <span>{{ isImproving.analyst ? "Improving..." : "Improve" }}</span>
+                      </button>
+                    </div>
+                    <textarea
+                      id="analyst-prompt"
+                      v-model="lightssAnalystPrompt"
+                      rows="4"
+                      placeholder="Coordination guidance, music analysis criteria..."
+                      @change="settingsChanged"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <hr class="agent-separator" />
+
+                <!-- 1b. Sketch Agent -->
+                <div class="agent-config-block">
+                  <h4 class="agent-title">
+                    <span class="material-symbols-outlined">bolt</span>
+                    Sketch Agent <span class="agent-hint">fires immediately on song change</span>
+                  </h4>
+                  <p class="agent-desc">Produces an immediate fast draft of the visual concept on song change, before the full analyst pipeline runs.</p>
+
+                  <YTMDSetting
+                    v-model="lightssSketchProvider"
+                    :options-map="{
+                      [LightssAiProvider.Ollama]: 'Ollama',
+                      [LightssAiProvider.OpenRouter]: 'OpenRouter',
+                      [LightssAiProvider.OpenAI]: 'OpenAI',
+                      [LightssAiProvider.Gemini]: 'Gemini'
+                    }"
+                    type="select"
+                    name="Provider"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting v-model="lightssSketchModel" type="text" name="Model" @change="settingsChanged" />
+                  <YTMDSetting
+                    v-model="lightssVisionEnabled"
+                    type="checkbox"
+                    name="Album art vision input"
+                    description="Send album art thumbnail to the sketch agent for visual inspiration"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting
+                    v-model.number="stepIntervalSecs"
+                    type="range"
+                    name="Step interval (seconds)"
+                    description="How often the pipeline re-runs during a track"
+                    min="3"
+                    max="30"
+                    step="1"
+                    @change="settingsChanged"
+                  />
+                </div>
+
+                <hr class="agent-separator" />
+
+                <!-- 2. WLED Control Agent -->
+                <div class="agent-config-block">
+                  <h4 class="agent-title">
+                    <span class="material-symbols-outlined">tungsten</span>
+                    WLED Control Agent
+                  </h4>
+                  <p class="agent-desc">Translates the central visual concept into real-time aesthetic colors and safe, non-strobing WLED effects.</p>
+
+                  <YTMDSetting
+                    v-model="lightssWledProvider"
+                    :options-map="{
+                      [LightssAiProvider.Ollama]: 'Ollama',
+                      [LightssAiProvider.OpenRouter]: 'OpenRouter',
+                      [LightssAiProvider.OpenAI]: 'OpenAI',
+                      [LightssAiProvider.Gemini]: 'Gemini'
+                    }"
+                    type="select"
+                    name="Provider"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting v-model="lightssWledModel" type="text" name="Model" @change="settingsChanged" />
+
+                  <div class="prompt-field">
+                    <div class="prompt-field-header">
+                      <label for="wled-prompt">System Prompt</label>
+                      <button
+                        class="improve-prompt-btn"
+                        :class="{ 'is-loading': isImproving.wled }"
+                        :disabled="isImproving.wled"
+                        title="Revise and improve prompt using active AI"
+                        @click="improvePrompt('wled')"
+                      >
+                        <span class="material-symbols-outlined">{{ isImproving.wled ? "sync" : "bolt" }}</span>
+                        <span>{{ isImproving.wled ? "Improving..." : "Improve" }}</span>
+                      </button>
+                    </div>
+                    <textarea
+                      id="wled-prompt"
+                      v-model="lightssWledPrompt"
+                      rows="4"
+                      placeholder="WLED lighting behavior, transition times, colors..."
+                      @change="settingsChanged"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <hr class="agent-separator" />
+
+                <!-- 3. TV Canvas Agent -->
+                <div class="agent-config-block">
+                  <h4 class="agent-title">
+                    <span class="material-symbols-outlined">tv</span>
+                    TV Canvas Agent
+                  </h4>
+                  <p class="agent-desc">Renders gorgeous reactive visualizers, art designs, and theme elements on a true black base.</p>
+
+                  <YTMDSetting
+                    v-model="lightssCanvasProvider"
+                    :options-map="{
+                      [LightssAiProvider.Ollama]: 'Ollama',
+                      [LightssAiProvider.OpenRouter]: 'OpenRouter',
+                      [LightssAiProvider.OpenAI]: 'OpenAI',
+                      [LightssAiProvider.Gemini]: 'Gemini'
+                    }"
+                    type="select"
+                    name="Provider"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting v-model="lightssCanvasModel" type="text" name="Model" @change="settingsChanged" />
+
+                  <div class="prompt-field">
+                    <div class="prompt-field-header">
+                      <label for="canvas-prompt">System Prompt</label>
+                      <button
+                        class="improve-prompt-btn"
+                        :class="{ 'is-loading': isImproving.canvas }"
+                        :disabled="isImproving.canvas"
+                        title="Revise and improve prompt using active AI"
+                        @click="improvePrompt('canvas')"
+                      >
+                        <span class="material-symbols-outlined">{{ isImproving.canvas ? "sync" : "bolt" }}</span>
+                        <span>{{ isImproving.canvas ? "Improving..." : "Improve" }}</span>
+                      </button>
+                    </div>
+                    <textarea
+                      id="canvas-prompt"
+                      v-model="lightssCanvasPrompt"
+                      rows="4"
+                      placeholder="Screen visual layout, theme, contrast rules..."
+                      @change="settingsChanged"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <hr class="agent-separator" />
+
+                <!-- 4. VJ Host Agent -->
+                <div class="agent-config-block">
+                  <h4 class="agent-title">
+                    <span class="material-symbols-outlined">forum</span>
+                    VJ Host Agent
+                  </h4>
+                  <p class="agent-desc">Generates late-night DJ rolling ticker comments, facts, and artist trivia in concise lines.</p>
+
+                  <YTMDSetting
+                    v-model="lightssHostProvider"
+                    :options-map="{
+                      [LightssAiProvider.Ollama]: 'Ollama',
+                      [LightssAiProvider.OpenRouter]: 'OpenRouter',
+                      [LightssAiProvider.OpenAI]: 'OpenAI',
+                      [LightssAiProvider.Gemini]: 'Gemini'
+                    }"
+                    type="select"
+                    name="Provider"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting v-model="lightssHostModel" type="text" name="Model" @change="settingsChanged" />
+
+                  <div class="prompt-field">
+                    <div class="prompt-field-header">
+                      <label for="host-prompt">System Prompt</label>
+                      <button
+                        class="improve-prompt-btn"
+                        :class="{ 'is-loading': isImproving.host }"
+                        :disabled="isImproving.host"
+                        title="Revise and improve prompt using active AI"
+                        @click="improvePrompt('host')"
+                      >
+                        <span class="material-symbols-outlined">{{ isImproving.host ? "sync" : "bolt" }}</span>
+                        <span>{{ isImproving.host ? "Improving..." : "Improve" }}</span>
+                      </button>
+                    </div>
+                    <textarea
+                      id="host-prompt"
+                      v-model="lightssHostPrompt"
+                      rows="4"
+                      placeholder="VJ personality, rolling ticker facts, music notes..."
+                      @change="settingsChanged"
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Premium AI Audio Integrations (Lyria & DJ Voice) -->
+          <div class="settings-section">
+            <h3 class="section-title"><span class="material-symbols-outlined">queue_music</span> Realtime Lyria & DJ Voice</h3>
+            <p class="section-subtitle">Enable live background music/jingle synthesis via Lyria and a dynamic AI radio DJ voice model.</p>
+
+            <YTMDSetting
+              v-model="lightssLyriaEnabled"
+              type="checkbox"
+              name="Enable Realtime Lyria Jingles"
+              description="Synth lo-fi or jazz jingles during breaks"
+              @change="settingsChanged"
+            />
+            <div v-if="lightssLyriaEnabled" class="settings-group indented">
+              <div class="prompt-field">
+                <div class="prompt-field-header">
+                  <label for="lyria-prompt">Lyria Jingle Prompt / Style</label>
+                  <button
+                    class="improve-prompt-btn"
+                    :class="{ 'is-loading': isImproving.lyria }"
+                    :disabled="isImproving.lyria"
+                    title="Revise and improve prompt using active AI"
+                    @click="improvePrompt('lyria')"
+                  >
+                    <span class="material-symbols-outlined">{{ isImproving.lyria ? "sync" : "bolt" }}</span>
+                    <span>{{ isImproving.lyria ? "Improving..." : "Improve" }}</span>
+                  </button>
+                </div>
+                <textarea
+                  id="lyria-prompt"
+                  v-model="lightssLyriaPrompt"
+                  rows="3"
+                  placeholder="Describe the mood, instruments, or genre of generated jingles..."
+                  @change="settingsChanged"
+                ></textarea>
+              </div>
+            </div>
+
+            <YTMDSetting
+              v-model="lightssDjVoiceEnabled"
+              type="checkbox"
+              name="Enable DJ Voice Model"
+              description="A text-to-speech voice model that speaks VJ lines"
+              @change="settingsChanged"
+            />
+            <div v-if="lightssDjVoiceEnabled" class="settings-group indented">
+              <YTMDSetting
+                v-model="lightssDjVoiceModel"
+                type="text"
+                name="DJ Voice model/ID"
+                description="ID of the voice model (e.g. ElevenLabs, Google Journey-F, OpenAI alloy)"
+                @change="settingsChanged"
+              />
+              <div class="prompt-field">
+                <div class="prompt-field-header">
+                  <label for="dj-voice-prompt">DJ Voice Persona / System Prompt</label>
+                  <button
+                    class="improve-prompt-btn"
+                    :class="{ 'is-loading': isImproving.dj }"
+                    :disabled="isImproving.dj"
+                    title="Revise and improve prompt using active AI"
+                    @click="improvePrompt('dj')"
+                  >
+                    <span class="material-symbols-outlined">{{ isImproving.dj ? "sync" : "bolt" }}</span>
+                    <span>{{ isImproving.dj ? "Improving..." : "Improve" }}</span>
+                  </button>
+                </div>
+                <textarea
+                  id="dj-voice-prompt"
+                  v-model="lightssDjVoicePrompt"
+                  rows="3"
+                  placeholder="DJ persona, mood, length constraints..."
+                  @change="settingsChanged"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Studio Compressor Settings -->
+          <div class="settings-section audio-tools-section">
+            <h3 class="section-title"><span class="material-symbols-outlined">equalizer</span> Studio Dynamics Compressor</h3>
+            <p class="section-subtitle">
+              A high-quality dynamics processor in the audio analyzer pipeline. Actively limits signal peaks to deliver perfectly smoothed, premium TV
+              visualizer performance with zero bounce or jitter.
+            </p>
+
+            <YTMDSetting v-model="audioCompressorEnabled" type="checkbox" name="Enable Compressor Node" @change="settingsChanged" />
+
+            <div v-if="audioCompressorEnabled" class="compressor-panel indented">
+              <div class="compressor-grid">
+                <!-- Threshold -->
+                <div class="compressor-control">
+                  <div class="control-header">
+                    <span class="control-name">Threshold</span>
+                    <span class="control-value">{{ audioCompressorThreshold }} dB</span>
+                  </div>
+                  <input
+                    v-model.number="audioCompressorThreshold"
+                    type="range"
+                    min="-60"
+                    max="0"
+                    step="1"
+                    class="compressor-slider"
+                    @change="settingsChanged"
+                  />
+                  <span class="control-desc">Audio level where compression begins. Lower values equal more compressed signal.</span>
+                </div>
+
+                <!-- Ratio -->
+                <div class="compressor-control">
+                  <div class="control-header">
+                    <span class="control-name">Ratio</span>
+                    <span class="control-value">{{ audioCompressorRatio }}:1</span>
+                  </div>
+                  <input v-model.number="audioCompressorRatio" type="range" min="1" max="20" step="1" class="compressor-slider" @change="settingsChanged" />
+                  <span class="control-desc">Compression intensity. A ratio of 12:1 acts as a powerful peak-limiting wall.</span>
+                </div>
+
+                <!-- Attack -->
+                <div class="compressor-control">
+                  <div class="control-header">
+                    <span class="control-name">Attack Time</span>
+                    <span class="control-value">{{ Math.round(audioCompressorAttack * 1000) }} ms</span>
+                  </div>
+                  <input
+                    v-model.number="audioCompressorAttack"
+                    type="range"
+                    min="0.001"
+                    max="0.1"
+                    step="0.001"
+                    class="compressor-slider"
+                    @change="settingsChanged"
+                  />
+                  <span class="control-desc">Time taken to reduce gain. Lower is faster, ideal for crisp peak catching.</span>
+                </div>
+
+                <!-- Release -->
+                <div class="compressor-control">
+                  <div class="control-header">
+                    <span class="control-name">Release Time</span>
+                    <span class="control-value">{{ Math.round(audioCompressorRelease * 1000) }} ms</span>
+                  </div>
+                  <input
+                    v-model.number="audioCompressorRelease"
+                    type="range"
+                    min="0.01"
+                    max="1.0"
+                    step="0.01"
+                    class="compressor-slider"
+                    @change="settingsChanged"
+                  />
+                  <span class="control-desc">Time taken to return to normal gain. Slower release prevents visual 'pumping' effect.</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1177,5 +1840,300 @@ button {
 .shortcuts-tab .shortcut-title .register-error {
   margin-left: 4px;
   color: #f44336;
+}
+
+/* AI & Audio custom styling */
+.ai-audio-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.settings-section {
+  border-bottom: 1px solid #212121;
+  padding-bottom: 24px;
+}
+
+.settings-section:last-of-type {
+  border-bottom: none;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 500;
+  color: #eeeeee;
+  margin: 0 0 4px 0;
+}
+
+.section-title .material-symbols-outlined {
+  color: hsl(265, 80%, 65%);
+  font-size: 24px;
+}
+
+.section-subtitle {
+  color: #969696;
+  font-size: 13px;
+  margin: 0 0 16px 0;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prompts-container {
+  background-color: #0b0b0b;
+  border-radius: 8px;
+  border: 1px solid #1a1a1a;
+  padding: 16px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prompt-header h4 {
+  margin: 0 0 4px 0;
+  color: #eeeeee;
+  font-size: 14px;
+}
+
+.prompt-header .prompt-desc {
+  color: #888888;
+  font-size: 12px;
+  margin: 0;
+}
+
+.prompt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prompt-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.improve-prompt-btn {
+  background: none;
+  border: 1px solid #1f1f1f;
+  border-radius: 4px;
+  color: hsl(265, 85%, 70%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.improve-prompt-btn:hover:not(:disabled) {
+  background-color: hsl(265, 60%, 15%);
+  border-color: hsl(265, 80%, 45%);
+  color: hsl(265, 95%, 85%);
+}
+
+.improve-prompt-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.improve-prompt-btn .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.improve-prompt-btn.is-loading .material-symbols-outlined {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.prompt-field label {
+  color: #bbbbbb;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.prompt-field textarea {
+  background-color: #121212;
+  color: #e0e0e0;
+  border: 1px solid #262626;
+  border-radius: 6px;
+  padding: 10px;
+  font-family: "Fira Code", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.prompt-field textarea:focus {
+  border-color: hsl(265, 60%, 50%);
+  box-shadow: 0 0 0 2px rgba(138, 75, 241, 0.15);
+}
+
+.agent-config-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: #0d0d0d;
+  border-radius: 6px;
+  border: 1px solid #141414;
+  padding: 14px;
+}
+
+.agent-title {
+  margin: 0;
+  color: hsl(265, 85%, 80%);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.agent-title .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.agent-desc {
+  margin: 0 0 4px 0;
+  color: #a0a0a0;
+  font-size: 11px;
+}
+
+.agent-separator {
+  border: 0;
+  border-top: 1px solid #1f1f1f;
+  margin: 12px 0;
+}
+
+/* Audio Compressor Panel */
+.compressor-panel {
+  background-color: #0b0b0b;
+  border-radius: 8px;
+  border: 1px solid #1a1a1a;
+  padding: 20px;
+  margin-top: 12px;
+}
+
+.compressor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.compressor-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.control-name {
+  color: #eeeeee;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.control-value {
+  color: hsl(265, 85%, 70%);
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.compressor-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #212121;
+  outline: none;
+  margin: 4px 0;
+}
+
+.compressor-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: hsl(265, 80%, 65%);
+  cursor: pointer;
+  transition:
+    transform 0.1s ease,
+    background 0.1s ease;
+}
+
+.compressor-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: hsl(265, 90%, 70%);
+}
+
+.control-desc {
+  color: #888888;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Integrations hint box */
+.hint-box {
+  background-color: #0b0b0b;
+  border: 1px solid #1a1a1a;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.hint-icon {
+  font-size: 32px;
+  color: hsl(265, 80%, 65%);
+}
+
+.hint-box button {
+  background-color: hsl(265, 60%, 30%);
+  border: 1px solid hsl(265, 60%, 45%);
+  color: #eeeeee;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.hint-box button:hover {
+  background-color: hsl(265, 65%, 35%);
+  border-color: hsl(265, 70%, 55%);
 }
 </style>
