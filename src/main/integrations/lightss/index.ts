@@ -864,6 +864,11 @@ export default class LightssIntegration implements IIntegration {
         const url = new URL(`/v1beta/${modelName}:generateContent`, baseUrl);
         url.searchParams.set("key", apiKey);
 
+        // The Generative Language API only resolves fileData.fileUri for File-API uploads or
+        // GCS URIs, not arbitrary public image URLs (like a YouTube thumbnail). Fetch the bytes
+        // and send them as inlineData so vision actually reaches the model.
+        const imagePart = imageUrl ? await this.fetchImageAsInlineData(imageUrl) : null;
+
         response = await this.postJson<JsonValue>(
           url,
           {
@@ -872,7 +877,7 @@ export default class LightssIntegration implements IIntegration {
                 role: "user",
                 parts: [
                   { text: `System Instructions:\n${systemPrompt}\n\nSong Context:\n${userPrompt}` },
-                  ...(imageUrl ? [{ fileData: { fileUri: imageUrl, mimeType: imageUrl.endsWith(".png") ? "image/png" : "image/jpeg" } }] : [])
+                  ...(imagePart ? [{ inlineData: { mimeType: imagePart.mimeType, data: imagePart.base64 } }] : [])
                 ]
               }
             ],
@@ -1286,6 +1291,38 @@ export default class LightssIntegration implements IIntegration {
         request.destroy(new Error(`Timed out after ${timeoutMs}ms`));
       });
       request.on("error", reject);
+      request.end();
+    });
+  }
+
+  private fetchImageAsInlineData(imageUrl: string, timeoutMs = WLED_TIMEOUT_MS * 2): Promise<{ mimeType: string; base64: string } | null> {
+    return new Promise(resolve => {
+      let url: URL;
+      try {
+        url = new URL(imageUrl);
+      } catch {
+        resolve(null);
+        return;
+      }
+
+      const transport = url.protocol === "https:" ? https : http;
+      const request = transport.request(url, { method: "GET", timeout: timeoutMs }, response => {
+        if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) {
+          response.resume();
+          resolve(null);
+          return;
+        }
+
+        const contentType = response.headers["content-type"];
+        const mimeType = typeof contentType === "string" && contentType.startsWith("image/") ? contentType.split(";")[0].trim() : "image/jpeg";
+        const chunks: Buffer[] = [];
+        response.on("data", chunk => chunks.push(chunk as Buffer));
+        response.on("end", () => resolve({ mimeType, base64: Buffer.concat(chunks).toString("base64") }));
+        response.on("error", () => resolve(null));
+      });
+
+      request.on("timeout", () => request.destroy());
+      request.on("error", () => resolve(null));
       request.end();
     });
   }
