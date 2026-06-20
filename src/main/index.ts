@@ -26,12 +26,25 @@ import electronSquirrelStartup from "electron-squirrel-startup";
 
 import MemoryStore from "./memory-store";
 import playerStateStore, { PlayerState, VideoState } from "./player-state-store";
-import { CloseAction, MemoryStoreSchema, MinimizeAction, PlayerLayout, StoreSchema, TopBarLayout, TrayIconStyle } from "../shared/store/schema";
+import { updateTvAppearance, updateTvAudioData, updateTvLightssMessage } from "./tv-display-state";
+import { RendererPlayerState, RendererVideoState } from "../shared/player";
+import {
+  CloseAction,
+  LightssAiProvider,
+  MemoryStoreSchema,
+  MinimizeAction,
+  PlayerLayout,
+  StoreSchema,
+  TopBarLayout,
+  TrayIconStyle,
+  VuMeterStyle
+} from "../shared/store/schema";
 
 import CompanionServer from "./integrations/companion-server";
 import CustomCSS from "./integrations/custom-css";
 import DiscordPresence from "./integrations/discord-presence";
 import LastFM from "./integrations/last-fm";
+import Lightss from "./integrations/lightss";
 import NowPlayingNotifications from "./integrations/notifications";
 import VolumeRatio from "./integrations/volume-ratio";
 
@@ -54,6 +67,8 @@ let appUpdateDownloaded = false;
 let appLaunchUpdateCheck = true;
 
 let stateSaverInterval: NodeJS.Timeout | null = null;
+let mainWindowMiniPlayer = false;
+let mainWindowRestoreBounds: Electron.Rectangle | null = null;
 
 //#region   Crash + Error reporting
 crashReporter.start({ uploadToServer: false });
@@ -165,6 +180,7 @@ const companionServer = new CompanionServer();
 const customCss = new CustomCSS();
 const discordPresence = new DiscordPresence();
 const lastFMScrobbler = new LastFM();
+const lightss = new Lightss();
 const nowPlayingNotifications = new NowPlayingNotifications();
 const ratioVolume = new VolumeRatio();
 
@@ -175,6 +191,14 @@ let settingsWindow: BrowserWindow = null;
 let ytmView: BrowserView = null;
 let tray: Tray = null;
 let trayContextMenu = null;
+let audioAnalyzerSubscribed = false;
+
+lightss.onAiMessage(message => {
+  updateTvLightssMessage(message);
+  if (mainWindow !== null) {
+    mainWindow.webContents.send("lightss:aiMessage", message);
+  }
+});
 
 // These variables tend to be changed often so we store it in memory and write on close (less disk usage)
 let lastUrl = "";
@@ -347,6 +371,11 @@ function getMainShellMetrics() {
       break;
     }
 
+    case PlayerLayout.FullscreenVu: {
+      playerHeight = 0;
+      break;
+    }
+
     case PlayerLayout.ExpandedStrip:
     default: {
       playerHeight = 148;
@@ -360,8 +389,56 @@ function getMainShellMetrics() {
   };
 }
 
+function mapVideoState(state: VideoState): RendererVideoState {
+  switch (state) {
+    case VideoState.Playing:
+      return RendererVideoState.Playing;
+    case VideoState.Buffering:
+      return RendererVideoState.Buffering;
+    case VideoState.Paused:
+      return RendererVideoState.Paused;
+    default:
+      return RendererVideoState.Unknown;
+  }
+}
+
+function getRendererPlayerState(state: PlayerState): RendererPlayerState {
+  return {
+    adPlaying: state.adPlaying,
+    muted: state.muted,
+    trackState: mapVideoState(state.trackState),
+    videoDetails: state.videoDetails
+      ? {
+          album: state.videoDetails.album,
+          artist: state.videoDetails.author,
+          durationSeconds: state.videoDetails.durationSeconds,
+          thumbnails: state.videoDetails.thumbnails,
+          title: state.videoDetails.title
+        }
+      : null,
+    videoProgress: state.videoProgress,
+    volume: state.volume
+  };
+}
+
+function broadcastPlayerState(state: PlayerState) {
+  if (mainWindow !== null) {
+    mainWindow.webContents.send("playerState:stateChanged", getRendererPlayerState(state));
+  }
+}
+
 function setYTMViewBounds() {
   if (!mainWindow || !ytmView) return;
+
+  if (mainWindowMiniPlayer) {
+    ytmView.setBounds({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0
+    });
+    return;
+  }
 
   if (mainWindow.fullScreen) {
     ytmView.setBounds({
@@ -375,6 +452,17 @@ function setYTMViewBounds() {
 
   const { topBarHeight, playerHeight } = getMainShellMetrics();
   const contentBounds = mainWindow.getContentBounds();
+
+  if (store.get("appearance.playerLayout") === PlayerLayout.FullscreenVu) {
+    ytmView.setBounds({
+      x: 0,
+      y: topBarHeight,
+      width: contentBounds.width,
+      height: 0
+    });
+    return;
+  }
+
   ytmView.setBounds({
     x: 0,
     y: topBarHeight,
@@ -382,6 +470,76 @@ function setYTMViewBounds() {
     height: Math.max(0, contentBounds.height - topBarHeight - playerHeight)
   });
 }
+
+function enterMiniPlayerMode() {
+  if (!mainWindow || mainWindowMiniPlayer) return;
+
+  mainWindowRestoreBounds = mainWindow.getNormalBounds();
+  mainWindowMiniPlayer = true;
+  memoryStore.set("mainWindowMiniPlayer", true);
+  setYTMViewBounds();
+  mainWindow.setMinimumSize(360, 148);
+  mainWindow.setBounds({
+    width: 420,
+    height: 148
+  });
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function restoreMainWindowMode() {
+  if (!mainWindow || !mainWindowMiniPlayer) return;
+
+  mainWindowMiniPlayer = false;
+  memoryStore.set("mainWindowMiniPlayer", false);
+  mainWindow.setMinimumSize(800, 520);
+  if (mainWindowRestoreBounds) {
+    mainWindow.setBounds(mainWindowRestoreBounds);
+  }
+  setYTMViewBounds();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function handleMainWindowClose(event: Electron.Event) {
+  if (!mainWindow) return;
+
+  if (applicationQuitting) {
+    store.set("state.windowBounds", mainWindow.getNormalBounds());
+    store.set("state.windowMaximized", mainWindow.isMaximized());
+    return;
+  }
+
+  const closeAction = store.get("general.closeAction");
+
+  if (closeAction === CloseAction.MiniPlayer) {
+    event.preventDefault();
+    enterMiniPlayerMode();
+    return;
+  }
+
+  if (closeAction === CloseAction.Tray || store.get("general").hideToTrayOnClose || isDarwin) {
+    event.preventDefault();
+    mainWindow.hide();
+    return;
+  }
+
+  store.set("state.windowBounds", mainWindow.getNormalBounds());
+  store.set("state.windowMaximized", mainWindow.isMaximized());
+}
+
+function handleMainWindowMinimize() {
+  if (!mainWindow) return;
+
+  if (store.get("general.minimizeAction") === MinimizeAction.MiniPlayer) {
+    enterMiniPlayerMode();
+    return;
+  }
+
+  mainWindow.minimize();
+}
+
+playerStateStore.addEventListener(broadcastPlayerState);
 
 // Create the persistent config store
 const store = new Conf<StoreSchema>({
@@ -409,6 +567,8 @@ const store = new Conf<StoreSchema>({
       playerLayout: PlayerLayout.ExpandedStrip,
       topBarLayout: TopBarLayout.TwoLevel,
       vuMeterEnabled: true,
+      vuMeterTheme: 0,
+      vuMeterStyle: VuMeterStyle.Bars,
       zoom: 100,
       trayIconStyle: TrayIconStyle.Auto
     },
@@ -424,7 +584,22 @@ const store = new Conf<StoreSchema>({
       companionServerAuthTokens: null,
       companionServerCORSWildcardEnabled: false,
       discordPresenceEnabled: false,
-      lastFMEnabled: false
+      lastFMEnabled: false,
+      lightssEnabled: false,
+      lightssReactiveEnabled: true,
+      lightssHost: "http://10.27.27.110",
+      lightssAiProvider: LightssAiProvider.Ollama,
+      lightssOpenAIModel: "gpt-5.5",
+      lightssOpenAIApiKey: null,
+      lightssOpenAIRealtimeModel: "gpt-realtime-2",
+      lightssOpenAIRealtimeVoice: "marin",
+      lightssOpenAIAudioDirectorModel: "gpt-5.5",
+      lightssOpenRouterModel: "openrouter/free",
+      lightssOpenRouterApiKey: null,
+      lightssOllamaBaseUrl: "http://10.27.27.10:11434",
+      lightssOllamaModel: "kimi-k2.7-code:cloud",
+      lightssBridgePath: null,
+      lightssPythonPath: null
     },
     shortcuts: {
       playPause: "",
@@ -478,10 +653,61 @@ const store = new Conf<StoreSchema>({
       if (!store.has("appearance.trayIconStyle")) {
         store.set("appearance.trayIconStyle", 0);
       }
+    },
+    ">=2.0.11": store => {
+      if (!store.has("appearance.vuMeterTheme")) {
+        store.set("appearance.vuMeterTheme", 0);
+      }
+    },
+    ">=2.0.12": store => {
+      if (!store.has("appearance.vuMeterStyle")) {
+        store.set("appearance.vuMeterStyle", VuMeterStyle.Bars);
+      }
+      if (!store.has("integrations.lightssEnabled")) {
+        store.set("integrations.lightssEnabled", false);
+      }
+      if (!store.has("integrations.lightssReactiveEnabled")) {
+        store.set("integrations.lightssReactiveEnabled", true);
+      }
+      if (!store.has("integrations.lightssHost")) {
+        store.set("integrations.lightssHost", "http://10.27.27.110");
+      }
+      if (!store.has("integrations.lightssAiProvider")) {
+        store.set("integrations.lightssAiProvider", LightssAiProvider.Ollama);
+      }
+      if (!store.has("integrations.lightssOpenAIModel")) {
+        store.set("integrations.lightssOpenAIModel", "gpt-5.5");
+      }
+      if (!store.has("integrations.lightssOpenAIApiKey")) {
+        store.set("integrations.lightssOpenAIApiKey", null);
+      }
+      if (!store.has("integrations.lightssOpenAIRealtimeModel")) {
+        store.set("integrations.lightssOpenAIRealtimeModel", "gpt-realtime-2");
+      }
+      if (!store.has("integrations.lightssOpenAIRealtimeVoice")) {
+        store.set("integrations.lightssOpenAIRealtimeVoice", "marin");
+      }
+      if (!store.has("integrations.lightssOpenAIAudioDirectorModel")) {
+        store.set("integrations.lightssOpenAIAudioDirectorModel", "gpt-5.5");
+      }
+      if (!store.has("integrations.lightssOllamaBaseUrl")) {
+        store.set("integrations.lightssOllamaBaseUrl", "http://10.27.27.10:11434");
+      }
+      if (!store.has("integrations.lightssOllamaModel")) {
+        store.set("integrations.lightssOllamaModel", "kimi-k2.7-code:cloud");
+      }
+      if (!store.has("integrations.lightssBridgePath")) {
+        store.set("integrations.lightssBridgePath", null);
+      }
+      if (!store.has("integrations.lightssPythonPath")) {
+        store.set("integrations.lightssPythonPath", null);
+      }
     }
   }
 });
 store.onDidAnyChange(async (newState, oldState) => {
+  updateTvAppearance(newState.appearance.vuMeterStyle ?? VuMeterStyle.Bars);
+
   if (mainWindow !== null) {
     mainWindow.webContents.send("settings:stateChanged", newState, oldState);
   }
@@ -611,13 +837,27 @@ store.onDidAnyChange(async (newState, oldState) => {
     log.info("Integration disabled: Last.fm");
   }
 
+  if (newState.integrations.lightssEnabled) {
+    lightss.provide(store, memoryStore, ytmView);
+  }
+  if (newState.integrations.lightssEnabled && !oldState.integrations.lightssEnabled) {
+    lightss.enable();
+    log.info("Integration enabled: Lightss");
+  } else if (!newState.integrations.lightssEnabled && oldState.integrations.lightssEnabled) {
+    lightss.disable();
+    log.info("Integration disabled: Lightss");
+  }
+
   if (anyShortcutChanged(newState, oldState)) registerShortcuts();
 });
 log.info("Created electron store");
+updateTvAppearance(store.get("appearance.vuMeterStyle") ?? VuMeterStyle.Bars);
 
 if (store.get("general").disableHardwareAcceleration) {
   app.disableHardwareAcceleration();
 }
+
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 if (store.get("playback").enableSpeakerFill) {
   app.commandLine.appendSwitch("try-supported-channel-layouts");
@@ -983,6 +1223,9 @@ const createOrShowSettingsWindow = (): void => {
   }
 
   if (settingsWindow !== null) {
+    if (!settingsWindow.isVisible()) {
+      settingsWindow.show();
+    }
     settingsWindow.focus();
     return;
   }
@@ -1045,6 +1288,7 @@ const createOrShowSettingsWindow = (): void => {
 
   settingsWindow.on("ready-to-show", () => {
     settingsWindow.show();
+    settingsWindow.focus();
     // Open the DevTools.
     if (process.env.NODE_ENV === "development") {
       settingsWindow.webContents.openDevTools({
@@ -1052,6 +1296,18 @@ const createOrShowSettingsWindow = (): void => {
       });
     }
   });
+  settingsWindow.webContents.on("did-finish-load", () => {
+    if (settingsWindow && !settingsWindow.isVisible()) {
+      settingsWindow.show();
+      settingsWindow.focus();
+    }
+  });
+  setTimeout(() => {
+    if (settingsWindow && !settingsWindow.isVisible()) {
+      settingsWindow.show();
+      settingsWindow.focus();
+    }
+  }, 1500).unref();
 
   // and load the index.html of the app.
   if (ALL_WINDOWS_VITE_DEV_SERVER_URL) settingsWindow.loadURL(ALL_WINDOWS_VITE_DEV_SERVER_URL + "/windows/settings/index.html");
@@ -1095,6 +1351,7 @@ const createYTMView = (): void => {
   });
   companionServer.provide(store, memoryStore, ytmView);
   customCss.provide(store, ytmView);
+  lightss.provide(store, memoryStore, ytmView);
   ratioVolume.provide(ytmView);
 
   // Attach events to ytm view
@@ -1325,16 +1582,15 @@ const createMainWindow = (): void => {
   });
   mainWindow.on("maximize", sendMainWindowStateIpc);
   mainWindow.on("unmaximize", sendMainWindowStateIpc);
-  mainWindow.on("minimize", sendMainWindowStateIpc);
+  mainWindow.on("minimize", () => {
+    sendMainWindowStateIpc();
+    if (store.get("general.minimizeAction") === MinimizeAction.MiniPlayer) {
+      enterMiniPlayerMode();
+    }
+  });
   mainWindow.on("restore", sendMainWindowStateIpc);
   mainWindow.on("close", event => {
-    if (!applicationQuitting && (store.get("general").hideToTrayOnClose || isDarwin)) {
-      event.preventDefault();
-      mainWindow.hide();
-    }
-
-    store.set("state.windowBounds", mainWindow.getNormalBounds());
-    store.set("state.windowMaximized", mainWindow.isMaximized());
+    handleMainWindowClose(event);
   });
 
   mainWindow.once("closed", () => {
@@ -1526,7 +1782,7 @@ app.on("ready", async () => {
     if (mainWindow !== null) {
       if (event.sender !== mainWindow.webContents) return;
 
-      mainWindow.minimize();
+      handleMainWindowMinimize();
     }
   });
 
@@ -1550,11 +1806,7 @@ app.on("ready", async () => {
     if (mainWindow !== null) {
       if (event.sender !== mainWindow.webContents) return;
 
-      if (store.get("general").hideToTrayOnClose || isDarwin) {
-        mainWindow.hide();
-      } else {
-        app.quit();
-      }
+      mainWindow.close();
     }
   });
 
@@ -1564,8 +1816,14 @@ app.on("ready", async () => {
     sendMainWindowStateIpc();
   });
 
+  ipcMain.handle("playerState:get", event => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+
+    return getRendererPlayerState(playerStateStore.getState());
+  });
+
   ipcMain.on("playerControl:execute", (event, command: string) => {
-    if (event.sender !== mainWindow.webContents) return;
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
     if (!ytmView) return;
 
     const allowedCommands = new Set(["playPause", "previous", "next", "toggleLike", "toggleDislike", "volumeUp", "volumeDown"]);
@@ -1574,17 +1832,40 @@ app.on("ready", async () => {
     ytmView.webContents.send("remoteControl:execute", command);
   });
 
-  ipcMain.on("mainWindow:openMiniPlayer", event => {
-    if (event.sender !== mainWindow.webContents) return;
+  ipcMain.on("audioAnalyzer:subscribe", event => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+    audioAnalyzerSubscribed = true;
+    if (!ytmView) return;
 
-    log.info("Mini-player requested from main shell");
+    ytmView.webContents.send("audioAnalyzer:control", "start");
+  });
+
+  ipcMain.on("audioAnalyzer:unsubscribe", event => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+    audioAnalyzerSubscribed = false;
+    if (!ytmView) return;
+
+    ytmView.webContents.send("audioAnalyzer:control", "stop");
+  });
+
+  ipcMain.on("mainWindow:openMiniPlayer", event => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+
+    enterMiniPlayerMode();
+  });
+
+  ipcMain.on("mainWindow:restoreFromMiniPlayer", event => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+
+    restoreMainWindowMode();
   });
 
   ipcMain.on("ytmView:focusSearch", event => {
-    if (event.sender !== mainWindow.webContents) return;
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
     if (!ytmView) return;
 
     ytmView.webContents.focus();
+    ytmView.webContents.send("remoteControl:execute", "focusSearch");
   });
 
   // Handle settings window ipc
@@ -1652,6 +1933,9 @@ app.on("ready", async () => {
       ratioVolume.ytmViewLoaded();
       // TODO: this is just a hack fix for custom css to update CSS when the view loads
       customCss.updateCSS();
+      if (audioAnalyzerSubscribed) {
+        ytmView.webContents.send("audioAnalyzer:control", "start");
+      }
     }
   });
 
@@ -1659,6 +1943,14 @@ app.on("ready", async () => {
     if (event.sender !== ytmView.webContents) return;
 
     playerStateStore.updateVideoProgress(progress);
+  });
+
+  ipcMain.on("ytmView:audioDataChanged", (event, frequencyData: number[]) => {
+    if (event.sender !== ytmView.webContents) return;
+    updateTvAudioData(frequencyData);
+    if (mainWindow === null) return;
+
+    mainWindow.webContents.send("audioAnalyzer:data", frequencyData);
   });
 
   ipcMain.on("ytmView:videoStateChanged", (event, state) => {
@@ -2011,6 +2303,13 @@ app.on("ready", async () => {
     lastFMScrobbler.provide(store, memoryStore);
     lastFMScrobbler.enable();
     log.info("Integration enabled: Last.fm");
+  }
+
+  // Lightss
+  if (store.get("integrations").lightssEnabled) {
+    lightss.provide(store, memoryStore, ytmView);
+    lightss.enable();
+    log.info("Integration enabled: Lightss");
   }
 
   nativeTheme.on("updated", setTrayIcon);

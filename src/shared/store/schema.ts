@@ -12,7 +12,8 @@ export enum TopBarLayout {
 export enum PlayerLayout {
   CompactDock = 0,
   ExpandedStrip = 1,
-  ControlConsole = 2
+  ControlConsole = 2,
+  FullscreenVu = 3
 }
 
 export enum CloseAction {
@@ -24,6 +25,29 @@ export enum CloseAction {
 export enum MinimizeAction {
   MiniPlayer = 0,
   Taskbar = 1
+}
+
+export enum VuMeterTheme {
+  Default = 0,
+  Classic = 1,
+  Ocean = 2,
+  Fire = 3,
+  Mono = 4,
+  Neon = 5
+}
+
+export enum VuMeterStyle {
+  Bars = 0,
+  ClassicLed = 1,
+  DotMatrix = 2,
+  SpectrumLine = 3,
+  AlbumGlow = 4
+}
+
+export enum LightssAiProvider {
+  OpenAI = "openai",
+  OpenRouter = "openrouter",
+  Ollama = "ollama"
 }
 
 export type StoreSchema = {
@@ -46,6 +70,8 @@ export type StoreSchema = {
     playerLayout: PlayerLayout;
     topBarLayout: TopBarLayout;
     vuMeterEnabled: boolean;
+    vuMeterTheme: VuMeterTheme;
+    vuMeterStyle: VuMeterStyle;
     zoom: number;
     trayIconStyle: TrayIconStyle;
   };
@@ -62,6 +88,21 @@ export type StoreSchema = {
     companionServerCORSWildcardEnabled: boolean;
     discordPresenceEnabled: boolean;
     lastFMEnabled: boolean;
+    lightssEnabled: boolean;
+    lightssReactiveEnabled: boolean;
+    lightssHost: string;
+    lightssAiProvider: LightssAiProvider;
+    lightssOpenAIModel: string;
+    lightssOpenAIApiKey: string | null;
+    lightssOpenAIRealtimeModel: string;
+    lightssOpenAIRealtimeVoice: string;
+    lightssOpenAIAudioDirectorModel: string;
+    lightssOpenRouterModel: string;
+    lightssOpenRouterApiKey: string | null;
+    lightssOllamaBaseUrl: string;
+    lightssOllamaModel: string;
+    lightssBridgePath: string | null;
+    lightssPythonPath: string | null;
   };
   shortcuts: {
     playPause: string;
@@ -110,4 +151,5 @@ export type MemoryStoreSchema = {
   ytmViewUnresponsive: boolean;
   appUpdateAvailable: boolean;
   appUpdateDownloaded: boolean;
+  mainWindowMiniPlayer: boolean;
 };

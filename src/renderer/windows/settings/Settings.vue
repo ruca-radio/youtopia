@@ -2,7 +2,17 @@
 import { ref } from "vue";
 import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
-import { CloseAction, MinimizeAction, PlayerLayout, StoreSchema, TopBarLayout, TrayIconStyle } from "~shared/store/schema";
+import {
+  CloseAction,
+  LightssAiProvider,
+  MinimizeAction,
+  PlayerLayout,
+  StoreSchema,
+  TopBarLayout,
+  TrayIconStyle,
+  VuMeterStyle,
+  VuMeterTheme
+} from "~shared/store/schema";
 import { AuthToken } from "~shared/integrations/companion-server/types";
 import logo from "~assets/icons/ytmd.png";
 
@@ -50,6 +60,8 @@ const customCSSPath = ref<string>(appearance.customCSSPath);
 const playerLayout = ref<number>(appearance.playerLayout);
 const topBarLayout = ref<number>(appearance.topBarLayout);
 const vuMeterEnabled = ref<boolean>(appearance.vuMeterEnabled);
+const vuMeterTheme = ref<number>(appearance.vuMeterTheme);
+const vuMeterStyle = ref<number>(appearance.vuMeterStyle ?? VuMeterStyle.Bars);
 const zoom = ref<number>(appearance.zoom);
 const trayIconStyle = ref<number>(appearance.trayIconStyle);
 
@@ -66,6 +78,21 @@ const companionServerAuthTokens = ref<AuthToken[]>(
 const companionServerCORSWildcardEnabled = ref<boolean>(integrations.companionServerCORSWildcardEnabled);
 const discordPresenceEnabled = ref<boolean>(integrations.discordPresenceEnabled);
 const lastFMEnabled = ref<boolean>(integrations.lastFMEnabled);
+const lightssEnabled = ref<boolean>(integrations.lightssEnabled ?? false);
+const lightssReactiveEnabled = ref<boolean>(integrations.lightssReactiveEnabled ?? true);
+const lightssHost = ref<string>(integrations.lightssHost ?? "http://10.27.27.110");
+const lightssAiProvider = ref<LightssAiProvider>(integrations.lightssAiProvider ?? LightssAiProvider.Ollama);
+const lightssOpenAIModel = ref<string>(integrations.lightssOpenAIModel ?? "gpt-5.5");
+const lightssOpenAIApiKey = ref<string | null>(integrations.lightssOpenAIApiKey ?? null);
+const lightssOpenAIRealtimeModel = ref<string>(integrations.lightssOpenAIRealtimeModel ?? "gpt-realtime-2");
+const lightssOpenAIRealtimeVoice = ref<string>(integrations.lightssOpenAIRealtimeVoice ?? "marin");
+const lightssOpenAIAudioDirectorModel = ref<string>(integrations.lightssOpenAIAudioDirectorModel ?? "gpt-5.5");
+const lightssOpenRouterModel = ref<string>(integrations.lightssOpenRouterModel ?? "openrouter/free");
+const lightssOpenRouterApiKey = ref<string | null>(integrations.lightssOpenRouterApiKey ?? null);
+const lightssOllamaBaseUrl = ref<string>(integrations.lightssOllamaBaseUrl ?? "http://10.27.27.10:11434");
+const lightssOllamaModel = ref<string>(integrations.lightssOllamaModel ?? "kimi-k2.7-code:cloud");
+const lightssBridgePath = ref<string | null>(integrations.lightssBridgePath ?? null);
+const lightssPythonPath = ref<string | null>(integrations.lightssPythonPath ?? null);
 
 const shortcutPlayPause = ref<string>(shortcuts.playPause);
 const shortcutNext = ref<string>(shortcuts.next);
@@ -93,6 +120,8 @@ store.onDidAnyChange(async newState => {
   playerLayout.value = newState.appearance.playerLayout;
   topBarLayout.value = newState.appearance.topBarLayout;
   vuMeterEnabled.value = newState.appearance.vuMeterEnabled;
+  vuMeterTheme.value = newState.appearance.vuMeterTheme;
+  vuMeterStyle.value = newState.appearance.vuMeterStyle ?? VuMeterStyle.Bars;
   zoom.value = newState.appearance.zoom;
   trayIconStyle.value = newState.appearance.trayIconStyle;
 
@@ -109,6 +138,21 @@ store.onDidAnyChange(async newState => {
   companionServerCORSWildcardEnabled.value = newState.integrations.companionServerCORSWildcardEnabled;
   discordPresenceEnabled.value = newState.integrations.discordPresenceEnabled;
   lastFMEnabled.value = newState.integrations.lastFMEnabled;
+  lightssEnabled.value = newState.integrations.lightssEnabled ?? false;
+  lightssReactiveEnabled.value = newState.integrations.lightssReactiveEnabled ?? true;
+  lightssHost.value = newState.integrations.lightssHost ?? "http://10.27.27.110";
+  lightssAiProvider.value = newState.integrations.lightssAiProvider ?? LightssAiProvider.Ollama;
+  lightssOpenAIModel.value = newState.integrations.lightssOpenAIModel ?? "gpt-5.5";
+  lightssOpenAIApiKey.value = newState.integrations.lightssOpenAIApiKey ?? null;
+  lightssOpenAIRealtimeModel.value = newState.integrations.lightssOpenAIRealtimeModel ?? "gpt-realtime-2";
+  lightssOpenAIRealtimeVoice.value = newState.integrations.lightssOpenAIRealtimeVoice ?? "marin";
+  lightssOpenAIAudioDirectorModel.value = newState.integrations.lightssOpenAIAudioDirectorModel ?? "gpt-5.5";
+  lightssOpenRouterModel.value = newState.integrations.lightssOpenRouterModel ?? "openrouter/free";
+  lightssOpenRouterApiKey.value = newState.integrations.lightssOpenRouterApiKey ?? null;
+  lightssOllamaBaseUrl.value = newState.integrations.lightssOllamaBaseUrl ?? "http://10.27.27.10:11434";
+  lightssOllamaModel.value = newState.integrations.lightssOllamaModel ?? "kimi-k2.7-code:cloud";
+  lightssBridgePath.value = newState.integrations.lightssBridgePath ?? null;
+  lightssPythonPath.value = newState.integrations.lightssPythonPath ?? null;
   lastFMSessionKey.value = newState.lastfm.sessionKey;
   scrobblePercent.value = newState.lastfm.scrobblePercent;
 
@@ -171,6 +215,8 @@ async function settingsChanged() {
   store.set("appearance.playerLayout", playerLayout.value);
   store.set("appearance.topBarLayout", topBarLayout.value);
   store.set("appearance.vuMeterEnabled", vuMeterEnabled.value);
+  store.set("appearance.vuMeterTheme", vuMeterTheme.value);
+  store.set("appearance.vuMeterStyle", vuMeterStyle.value);
   store.set("appearance.zoom", zoom.value);
   store.set("appearance.trayIconStyle", trayIconStyle.value);
 
@@ -184,6 +230,21 @@ async function settingsChanged() {
   store.set("integrations.companionServerCORSWildcardEnabled", companionServerCORSWildcardEnabled.value);
   store.set("integrations.discordPresenceEnabled", discordPresenceEnabled.value);
   store.set("integrations.lastFMEnabled", lastFMEnabled.value);
+  store.set("integrations.lightssEnabled", lightssEnabled.value);
+  store.set("integrations.lightssReactiveEnabled", lightssReactiveEnabled.value);
+  store.set("integrations.lightssHost", lightssHost.value);
+  store.set("integrations.lightssAiProvider", lightssAiProvider.value);
+  store.set("integrations.lightssOpenAIModel", lightssOpenAIModel.value);
+  store.set("integrations.lightssOpenAIApiKey", lightssOpenAIApiKey.value?.trim() || null);
+  store.set("integrations.lightssOpenAIRealtimeModel", lightssOpenAIRealtimeModel.value);
+  store.set("integrations.lightssOpenAIRealtimeVoice", lightssOpenAIRealtimeVoice.value);
+  store.set("integrations.lightssOpenAIAudioDirectorModel", lightssOpenAIAudioDirectorModel.value);
+  store.set("integrations.lightssOpenRouterModel", lightssOpenRouterModel.value);
+  store.set("integrations.lightssOpenRouterApiKey", lightssOpenRouterApiKey.value?.trim() || null);
+  store.set("integrations.lightssOllamaBaseUrl", lightssOllamaBaseUrl.value);
+  store.set("integrations.lightssOllamaModel", lightssOllamaModel.value);
+  store.set("integrations.lightssBridgePath", lightssBridgePath.value);
+  store.set("integrations.lightssPythonPath", lightssPythonPath.value);
   store.set("lastfm.scrobblePercent", scrobblePercent.value);
 
   store.set("shortcuts.playPause", shortcutPlayPause.value);
@@ -346,7 +407,8 @@ window.ytmd.handleUpdateDownloaded(() => {
             :options-map="{
               [PlayerLayout.CompactDock]: 'Compact Dock',
               [PlayerLayout.ExpandedStrip]: 'Expanded Strip',
-              [PlayerLayout.ControlConsole]: 'Control Console'
+              [PlayerLayout.ControlConsole]: 'Control Console',
+              [PlayerLayout.FullscreenVu]: 'Fullscreen VU'
             }"
             type="select"
             name="Player layout"
@@ -358,6 +420,39 @@ window.ytmd.handleUpdateDownloaded(() => {
             type="checkbox"
             name="VU meter"
             description="Show native meter animation in player controls"
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="vuMeterEnabled"
+            v-model="vuMeterTheme"
+            :options-map="{
+              [VuMeterTheme.Default]: 'Default',
+              [VuMeterTheme.Classic]: 'Classic',
+              [VuMeterTheme.Ocean]: 'Ocean',
+              [VuMeterTheme.Fire]: 'Fire',
+              [VuMeterTheme.Mono]: 'Mono',
+              [VuMeterTheme.Neon]: 'Neon'
+            }"
+            type="select"
+            name="VU meter theme"
+            description="Color theme for the audio level meter"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="vuMeterEnabled"
+            v-model="vuMeterStyle"
+            :options-map="{
+              [VuMeterStyle.Bars]: 'Bars',
+              [VuMeterStyle.ClassicLed]: 'Classic LED',
+              [VuMeterStyle.DotMatrix]: 'Dot matrix',
+              [VuMeterStyle.SpectrumLine]: 'Spectrum line',
+              [VuMeterStyle.AlbumGlow]: 'Album glow'
+            }"
+            type="select"
+            name="VU meter style"
+            description="Switch the meter shape used by the desktop shell and TV fallback"
+            indented
             @change="settingsChanged"
           />
           <YTMDSetting v-model="alwaysShowVolumeSlider" type="checkbox" name="Always show volume slider" @change="settingsChanged" />
@@ -493,6 +588,119 @@ window.ytmd.handleUpdateDownloaded(() => {
             min="50"
             max="95"
             step="5"
+            @change="settingsChanged"
+          />
+          <YTMDSetting v-model="lightssEnabled" type="checkbox" name="Lightss (WLED lighting)" @change="settingsChanged" />
+          <div v-if="lightssEnabled" class="setting indented">
+            <p class="description">Control the WLED lightshow from Youtopia while music is playing.</p>
+          </div>
+          <YTMDSetting
+            v-if="lightssEnabled"
+            v-model="lightssReactiveEnabled"
+            type="checkbox"
+            name="Automatic lightshow"
+            description="Rotate safe non-strobe WLED effects while music is playing"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled"
+            v-model="lightssHost"
+            type="text"
+            name="WLED host"
+            description="URL of the WLED controller"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled"
+            v-model="lightssAiProvider"
+            :options-map="{ [LightssAiProvider.Ollama]: 'Ollama', [LightssAiProvider.OpenRouter]: 'OpenRouter', [LightssAiProvider.OpenAI]: 'OpenAI' }"
+            type="select"
+            name="Lightss AI provider"
+            description="Choose which AI plans the WLED lightshow"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.Ollama"
+            v-model="lightssOllamaBaseUrl"
+            type="text"
+            name="Ollama base URL"
+            description="Base URL for the Ollama-compatible planner"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.Ollama"
+            v-model="lightssOllamaModel"
+            type="text"
+            name="Ollama model"
+            description="Model used to plan WLED scenes"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenRouter"
+            v-model="lightssOpenRouterModel"
+            type="text"
+            name="OpenRouter model"
+            description="Model used to plan WLED scenes through OpenRouter"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenRouter"
+            v-model="lightssOpenRouterApiKey"
+            type="text"
+            name="OpenRouter API key"
+            description="Optional; otherwise OPENROUTER_API_KEY from the app environment is used"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
+            v-model="lightssOpenAIModel"
+            type="text"
+            name="OpenAI model"
+            description="Model used to plan WLED scenes"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
+            v-model="lightssOpenAIRealtimeModel"
+            type="text"
+            name="DJ-GPT realtime model"
+            description="Realtime voice model for the TV DJ session"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
+            v-model="lightssOpenAIRealtimeVoice"
+            type="text"
+            name="DJ-GPT voice"
+            description="Realtime voice used by the TV DJ session"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
+            v-model="lightssOpenAIAudioDirectorModel"
+            type="text"
+            name="Audio director model"
+            description="Model used for fades, sets, search planning, and playlist direction"
+            indented
+            @change="settingsChanged"
+          />
+          <YTMDSetting
+            v-if="lightssEnabled && lightssAiProvider === LightssAiProvider.OpenAI"
+            v-model="lightssOpenAIApiKey"
+            type="text"
+            name="OpenAI API key"
+            description="Optional; otherwise OPENAI_API_KEY from the app environment is used"
+            indented
             @change="settingsChanged"
           />
         </div>

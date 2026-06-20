@@ -3,19 +3,23 @@ import IconButton from "./IconButton.vue";
 import NowPlayingInfo from "./NowPlayingInfo.vue";
 import PlayerProgress from "./PlayerProgress.vue";
 import VuMeter from "./VuMeter.vue";
+import { VuMeterStyle, VuMeterTheme } from "~shared/store/schema";
 import { ShellActions, ShellTrack } from "./types";
 
 defineProps<{
   actions: ShellActions;
   track: ShellTrack;
   vuMeterEnabled: boolean;
+  audioData: number[];
+  theme: VuMeterTheme;
+  vuMeterStyle: VuMeterStyle;
 }>();
 </script>
 
 <template>
   <section class="control-console-player">
     <div class="summary">
-      <div class="art"></div>
+      <div class="art"><img v-if="track.thumbnailUrl" :src="track.thumbnailUrl" alt="" /></div>
       <NowPlayingInfo :track="track" />
       <PlayerProgress :progress="track.progress" />
     </div>
@@ -34,7 +38,7 @@ defineProps<{
     </div>
     <div class="meters">
       <p>Meters</p>
-      <VuMeter :enabled="vuMeterEnabled" variant="console" />
+      <VuMeter :enabled="vuMeterEnabled" :active="track.isPlaying" :audio-data="audioData" :theme="theme" :style="vuMeterStyle" variant="console" />
     </div>
   </section>
 </template>
@@ -76,6 +80,14 @@ defineProps<{
   height: 62px;
   border-radius: 8px;
   background: linear-gradient(135deg, #b51d2d, #181818);
+  overflow: hidden;
+}
+
+.art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .queue-panel {

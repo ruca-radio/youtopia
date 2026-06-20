@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import IconButton from "./IconButton.vue";
+import { PlayerLayout, TopBarLayout } from "~shared/store/schema";
 import { ShellActions } from "./types";
 
 defineProps<{
   actions: ShellActions;
+  activePlayerLayout: PlayerLayout;
+  activeTopBarLayout: TopBarLayout;
 }>();
 </script>
 
@@ -22,10 +25,41 @@ defineProps<{
       <span class="hint">Ctrl K</span>
     </button>
 
+    <div class="system-slot">
+      <slot name="system-status"></slot>
+    </div>
+
     <div class="right">
-      <IconButton icon="space_dashboard" label="Player layout" />
-      <IconButton icon="equalizer" label="Meters" />
+      <IconButton
+        icon="vertical_align_bottom"
+        label="Compact Dock"
+        :disabled="activePlayerLayout === PlayerLayout.CompactDock"
+        @click="actions.setPlayerLayout(PlayerLayout.CompactDock)"
+      />
+      <IconButton
+        icon="splitscreen_bottom"
+        label="Expanded Strip"
+        :disabled="activePlayerLayout === PlayerLayout.ExpandedStrip"
+        @click="actions.setPlayerLayout(PlayerLayout.ExpandedStrip)"
+      />
+      <IconButton
+        icon="view_sidebar"
+        label="Control Console"
+        :disabled="activePlayerLayout === PlayerLayout.ControlConsole"
+        @click="actions.setPlayerLayout(PlayerLayout.ControlConsole)"
+      />
+      <IconButton
+        icon="equalizer"
+        label="Fullscreen VU"
+        :disabled="activePlayerLayout === PlayerLayout.FullscreenVu"
+        @click="actions.setPlayerLayout(PlayerLayout.FullscreenVu)"
+      />
       <IconButton icon="queue_music" label="Queue" />
+      <IconButton
+        :icon="activeTopBarLayout === TopBarLayout.Command ? 'view_agenda' : 'toolbar'"
+        label="Switch top bar"
+        @click="actions.setTopBarLayout(activeTopBarLayout === TopBarLayout.Command ? TopBarLayout.TwoLevel : TopBarLayout.Command)"
+      />
       <IconButton icon="settings" label="Settings" @click="actions.openSettings" />
       <IconButton icon="picture_in_picture_alt" label="Mini-player" @click="actions.openMiniPlayer" />
       <slot name="window-controls"></slot>
@@ -38,7 +72,7 @@ defineProps<{
   height: 44px;
   padding: 0 10px;
   display: grid;
-  grid-template-columns: auto minmax(260px, 1fr) auto;
+  grid-template-columns: auto minmax(220px, 1fr) minmax(168px, 220px) auto;
   gap: 12px;
   align-items: center;
   background: #070707;
@@ -47,10 +81,15 @@ defineProps<{
 }
 
 .left,
-.right {
+.right,
+.system-slot {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.system-slot {
+  min-width: 0;
 }
 
 .brand {

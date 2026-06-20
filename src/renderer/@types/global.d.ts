@@ -1,4 +1,5 @@
 import { WindowsEventArguments } from "~shared/types";
+import { RendererLightssAiMessage, RendererPlayerState } from "~shared/player";
 import Store from "../store-ipc/store";
 import { StoreSchema, MemoryStoreSchema } from "~shared/store/schema";
 import MemoryStore from "../store-ipc/memory-store";
@@ -30,7 +31,14 @@ declare global {
       switchFocus(context: "main" | "ytm"): void;
       playerControl(command: "playPause" | "previous" | "next" | "toggleLike" | "toggleDislike" | "volumeUp" | "volumeDown"): void;
       openMiniPlayer(): void;
+      restoreFromMiniPlayer(): void;
       focusSearch(): void;
+      getPlayerState(): Promise<RendererPlayerState>;
+      onPlayerStateChanged(callback: (state: RendererPlayerState) => void);
+      startAudioAnalyzer(): void;
+      stopAudioAnalyzer(): void;
+      onAudioData(callback: (frequencyData: number[]) => void);
+      onLightssAiMessage(callback: (message: RendererLightssAiMessage) => void);
 
       // YTM view specific
       ytmViewNavigateDefault(): void;

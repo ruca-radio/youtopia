@@ -4,9 +4,11 @@ import { FastifyPluginCallback, FastifyPluginOptions } from "fastify";
 import { StoreSchema } from "~shared/store/schema";
 import playerStateStore, { PlayerState, RepeatMode } from "../../../../player-state-store";
 import { createAuthToken, getIsTemporaryAuthCodeValidAndRemove, getTemporaryAuthCode, isAuthValid, isAuthValidMiddleware } from "../../api-shared/auth";
-import fastifyRateLimit from "@fastify/rate-limit";
+import { fastifyRateLimit } from "@fastify/rate-limit";
 import crypto from "crypto";
 import {
+  APIV1AudioDirectorPlanRequestBody,
+  APIV1AudioDirectorPlanRequestBodyType,
   APIV1CommandRequestBody,
   APIV1CommandRequestBodyType,
   APIV1RequestCodeBody,
@@ -30,6 +32,29 @@ import {
   YouTubeMusicUnavailableError
 } from "../../api-shared/errors";
 import path from "node:path";
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+type AudioDirectorAction = {
+  type: "fadeVolume" | "setVolume" | "play" | "pause" | "next" | "previous" | "shuffle" | "playQueueIndex" | "searchSongs" | "buildPlaylist";
+  reason: string;
+  volume?: number;
+  durationMs?: number;
+  query?: string;
+  count?: number;
+  queueIndex?: number;
+  playlistName?: string;
+};
+
+type AudioDirectorPlan = {
+  title: string;
+  summary: string;
+  actions: AudioDirectorAction[];
+  backgroundTasks: string[];
+};
+
+const DEFAULT_AUDIO_DIRECTOR_MODEL = "gpt-5.5";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 
 declare const ALL_WINDOWS_VITE_DEV_SERVER_URL: string;
 
@@ -93,6 +118,138 @@ type Playlist = {
 };
 
 const authorizationWindows: BrowserWindow[] = [];
+
+function getOpenAIApiKey(store: Conf<StoreSchema>): string | null {
+  const storeKey = (store.get("integrations.lightssOpenAIApiKey") as string | null)?.trim();
+  return storeKey || process.env.OPENAI_API_KEY?.trim() || null;
+}
+
+function extractJsonObject(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) return extractJsonObject(fenced[1]);
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+  return trimmed;
+}
+
+function extractOpenAIOutputText(response: JsonValue): string | null {
+  if (!response || typeof response !== "object" || Array.isArray(response)) return null;
+  if (typeof response.output_text === "string") return response.output_text;
+  const output = response.output;
+  if (!Array.isArray(output)) return null;
+  for (const item of output) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const content = item.content;
+    if (!Array.isArray(content)) continue;
+    for (const contentItem of content) {
+      if (!contentItem || typeof contentItem !== "object" || Array.isArray(contentItem)) continue;
+      if (typeof contentItem.text === "string") return contentItem.text;
+    }
+  }
+  return null;
+}
+
+async function postJson<T>(url: URL, payload: JsonValue, timeoutMs: number, headers: Record<string, string> = {}): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const responseBody = await response.text();
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${responseBody}`);
+    }
+    return responseBody ? (JSON.parse(responseBody) as T) : (null as T);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(numberValue)));
+}
+
+function sanitizeAudioDirectorPlan(value: unknown, maxActions: number): AudioDirectorPlan {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? (value as Partial<AudioDirectorPlan>) : {};
+  const rawActions = Array.isArray(source.actions) ? source.actions : [];
+  const actions = rawActions.slice(0, maxActions).flatMap(action => {
+    if (!action || typeof action !== "object" || Array.isArray(action)) return [];
+    const src = action as Partial<AudioDirectorAction>;
+    const allowedTypes = ["fadeVolume", "setVolume", "play", "pause", "next", "previous", "shuffle", "playQueueIndex", "searchSongs", "buildPlaylist"];
+    if (!allowedTypes.includes(String(src.type))) return [];
+    return [
+      {
+        type: src.type as AudioDirectorAction["type"],
+        reason: typeof src.reason === "string" && src.reason.trim() ? src.reason.trim() : "Audio director action",
+        volume: clampNumber(src.volume, 0, 100, 50),
+        durationMs: clampNumber(src.durationMs, 500, 12000, 2500),
+        query: typeof src.query === "string" ? src.query.slice(0, 160) : "",
+        count: clampNumber(src.count, 1, 25, 8),
+        queueIndex: clampNumber(src.queueIndex, 0, 200, 0),
+        playlistName: typeof src.playlistName === "string" ? src.playlistName.slice(0, 80) : ""
+      }
+    ];
+  });
+
+  return {
+    title: typeof source.title === "string" && source.title.trim() ? source.title.trim() : "Audio director plan",
+    summary: typeof source.summary === "string" && source.summary.trim() ? source.summary.trim() : "Prepared a bounded playback plan.",
+    actions,
+    backgroundTasks: Array.isArray(source.backgroundTasks) ? source.backgroundTasks.filter(task => typeof task === "string").slice(0, 6) : []
+  };
+}
+
+function getAudioDirectorPlanSchema(maxActions: number): JsonValue {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["title", "summary", "actions", "backgroundTasks"],
+    properties: {
+      title: { type: "string" },
+      summary: { type: "string" },
+      actions: {
+        type: "array",
+        minItems: 0,
+        maxItems: maxActions,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["type", "reason", "volume", "durationMs", "query", "count", "queueIndex", "playlistName"],
+          properties: {
+            type: {
+              type: "string",
+              enum: ["fadeVolume", "setVolume", "play", "pause", "next", "previous", "shuffle", "playQueueIndex", "searchSongs", "buildPlaylist"]
+            },
+            reason: { type: "string" },
+            volume: { type: "integer", minimum: 0, maximum: 100 },
+            durationMs: { type: "integer", minimum: 500, maximum: 12000 },
+            query: { type: "string" },
+            count: { type: "integer", minimum: 1, maximum: 25 },
+            queueIndex: { type: "integer", minimum: 0 },
+            playlistName: { type: "string" }
+          }
+        }
+      },
+      backgroundTasks: {
+        type: "array",
+        maxItems: 6,
+        items: { type: "string" }
+      }
+    }
+  };
+}
 
 const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> = async (fastify, options) => {
   const sendCommand = (commandRequest: APIV1CommandRequestBodyType) => {
@@ -229,6 +386,56 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
         }
       }
     }
+  };
+
+  const executeAudioDirectorAction = async (action: AudioDirectorAction): Promise<string> => {
+    if (action.type === "fadeVolume") {
+      const startVolume = playerStateStore.getState().volume;
+      const targetVolume = clampNumber(action.volume, 0, 100, startVolume);
+      const durationMs = clampNumber(action.durationMs, 500, 12000, 2500);
+      const steps = Math.max(2, Math.min(24, Math.round(durationMs / 350)));
+      for (let step = 1; step <= steps; step += 1) {
+        const volume = Math.round(startVolume + ((targetVolume - startVolume) * step) / steps);
+        sendCommand({ command: "setVolume", data: volume });
+        await new Promise(resolve => setTimeout(resolve, Math.round(durationMs / steps)));
+      }
+      return `Faded volume to ${targetVolume}`;
+    }
+
+    if (action.type === "setVolume") {
+      const volume = clampNumber(action.volume, 0, 100, playerStateStore.getState().volume);
+      sendCommand({ command: "setVolume", data: volume });
+      return `Set volume to ${volume}`;
+    }
+
+    if (action.type === "play" || action.type === "pause" || action.type === "next" || action.type === "previous" || action.type === "shuffle") {
+      sendCommand({ command: action.type });
+      return `Sent ${action.type}`;
+    }
+
+    if (action.type === "playQueueIndex") {
+      const queueIndex = clampNumber(action.queueIndex, 0, 200, 0);
+      sendCommand({ command: "playQueueIndex", data: queueIndex });
+      return `Played queue index ${queueIndex}`;
+    }
+
+    return `${action.type} planned for background execution`;
+  };
+
+  const buildAudioDirectorContext = () => {
+    const state = playerStateStore.getState();
+    return {
+      nowPlaying: transformPlayerState(state),
+      capabilities: {
+        immediate: ["fadeVolume", "setVolume", "play", "pause", "next", "previous", "shuffle", "playQueueIndex"],
+        backgroundPlanning: ["searchSongs", "buildPlaylist"],
+        note: "Search and playlist building should be planned as background tasks until a verified YouTube Music search/add pipeline is available."
+      },
+      personality:
+        "The user was a radio DJ for years. Act like a sharp assistant program director: musical, tasteful, concise, and good at segues, fades, sets, energy arcs, and keeping the room moving.",
+      safety:
+        "Do not make abrupt volume jumps unless asked. Prefer fades between 1500ms and 6000ms. Do not interrupt playback for background discovery unless execute is true and the action is immediate."
+    };
   };
 
   await fastify.register(fastifyRateLimit, {
@@ -510,6 +717,101 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
     (request, response) => {
       sendCommand(request.body);
       response.code(204).send();
+    }
+  );
+
+  fastify.post<{ Body: APIV1AudioDirectorPlanRequestBodyType }>(
+    "/audio-director/plan",
+    {
+      config: {
+        rateLimit: {
+          hook: "preHandler",
+          max: 6,
+          timeWindow: 1000 * 60,
+          keyGenerator: request => {
+            return request.authId || request.ip;
+          }
+        }
+      },
+      schema: {
+        body: APIV1AudioDirectorPlanRequestBody
+      },
+      preHandler: (request, response, next) => {
+        return isAuthValidMiddleware(options.getStore(), request, response, next);
+      }
+    },
+    async (request, response) => {
+      const apiKey = getOpenAIApiKey(options.getStore());
+      if (!apiKey) {
+        response.code(503).send({
+          error: "OpenAI API key is required for the audio director"
+        });
+        return;
+      }
+
+      const model =
+        (options.getStore().get("integrations.lightssOpenAIAudioDirectorModel") || DEFAULT_AUDIO_DIRECTOR_MODEL).trim() || DEFAULT_AUDIO_DIRECTOR_MODEL;
+      const maxActions = clampNumber(request.body.maxActions, 1, 8, 5);
+      const context = buildAudioDirectorContext();
+      const openAiResponse = await postJson<JsonValue>(
+        new URL(OPENAI_RESPONSES_URL),
+        {
+          model,
+          input: [
+            {
+              role: "system",
+              content: [
+                {
+                  type: "input_text",
+                  text: "You are DJ-GPT's audio director for Youtopia. Build practical radio-DJ style playback plans: tasteful fades, energy-aware sequencing, queue choices, song-search ideas, and playlist-building tasks. Return JSON only. Use immediate actions only from the provided immediate capability list. Put searchSongs and buildPlaylist actions in the plan as background tasks; do not claim they were executed."
+                }
+              ]
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: JSON.stringify({
+                    request: request.body.prompt,
+                    execute: Boolean(request.body.execute),
+                    context
+                  })
+                }
+              ]
+            }
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "audio_director_plan",
+              strict: true,
+              schema: getAudioDirectorPlanSchema(maxActions)
+            }
+          },
+          max_output_tokens: 1200
+        },
+        20000,
+        {
+          Authorization: `Bearer ${apiKey}`
+        }
+      );
+
+      const outputText = extractOpenAIOutputText(openAiResponse);
+      const plan = sanitizeAudioDirectorPlan(outputText ? JSON.parse(extractJsonObject(outputText)) : null, maxActions);
+      const executed: string[] = [];
+      if (request.body.execute) {
+        for (const action of plan.actions) {
+          if (action.type === "searchSongs" || action.type === "buildPlaylist") continue;
+          executed.push(await executeAudioDirectorAction(action));
+        }
+      }
+
+      response.send({
+        model,
+        plan,
+        executed
+      });
     }
   );
 

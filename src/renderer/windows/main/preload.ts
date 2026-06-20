@@ -3,6 +3,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 import { WindowsEventArguments } from "~shared/types";
+import { RendererLightssAiMessage, RendererPlayerState } from "~shared/player";
 import { MemoryStoreSchema, StoreSchema } from "~shared/store/schema";
 import MemoryStore from "../../store-ipc/memory-store";
 import Store from "../../store-ipc/store";
@@ -24,7 +25,23 @@ contextBridge.exposeInMainWorld("ytmd", {
   ytmViewRecreate: () => ipcRenderer.send("ytmView:recreate"),
   playerControl: (command: string) => ipcRenderer.send("playerControl:execute", command),
   openMiniPlayer: () => ipcRenderer.send("mainWindow:openMiniPlayer"),
+  restoreFromMiniPlayer: () => ipcRenderer.send("mainWindow:restoreFromMiniPlayer"),
   focusSearch: () => ipcRenderer.send("ytmView:focusSearch"),
+  getPlayerState: async (): Promise<RendererPlayerState> => await ipcRenderer.invoke("playerState:get"),
+  onPlayerStateChanged: (callback: (state: RendererPlayerState) => void) =>
+    ipcRenderer.on("playerState:stateChanged", (_event, state) => {
+      callback(state);
+    }),
+  startAudioAnalyzer: () => ipcRenderer.send("audioAnalyzer:subscribe"),
+  stopAudioAnalyzer: () => ipcRenderer.send("audioAnalyzer:unsubscribe"),
+  onAudioData: (callback: (frequencyData: number[]) => void) =>
+    ipcRenderer.on("audioAnalyzer:data", (_event, frequencyData) => {
+      callback(frequencyData);
+    }),
+  onLightssAiMessage: (callback: (message: RendererLightssAiMessage) => void) =>
+    ipcRenderer.on("lightss:aiMessage", (_event, message) => {
+      callback(message);
+    }),
   store: {
     set: (key: string, value: unknown) => store.set(key, value),
     get: async (key: keyof StoreSchema) => await store.get(key),

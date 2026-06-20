@@ -14,6 +14,7 @@ import { StoreSchema } from "~shared/store/schema";
 
 import playerBarControlsScript from "./scripts/playerbarcontrols.script?raw";
 import hookPlayerApiEventsScript from "./scripts/hookplayerapievents.script?raw";
+import audioAnalyzerScript from "./scripts/audioanalyzer.script?raw";
 import getPlaylistsScript from "./scripts/getplaylists.script?raw";
 import toggleLikeScript from "./scripts/togglelike.script?raw";
 import toggleDislikeScript from "./scripts/toggledislike.script?raw";
@@ -28,7 +29,8 @@ contextBridge.exposeInMainWorld("ytmd", {
   sendStoreUpdate: (queueState: unknown, likeStatus: string, volume: number, muted: boolean, adPlaying: boolean) =>
     ipcRenderer.send("ytmView:storeStateChanged", queueState, likeStatus, volume, muted, adPlaying),
   sendCreatePlaylistObservation: (playlist: unknown) => ipcRenderer.send("ytmView:createPlaylistObserved", playlist),
-  sendDeletePlaylistObservation: (playlistId: string) => ipcRenderer.send("ytmView:deletePlaylistObserved", playlistId)
+  sendDeletePlaylistObservation: (playlistId: string) => ipcRenderer.send("ytmView:deletePlaylistObserved", playlistId),
+  sendAudioData: (frequencyData: number[]) => ipcRenderer.send("ytmView:audioDataChanged", frequencyData)
 });
 
 function createStyleSheet() {
@@ -174,8 +176,23 @@ async function hookPlayerApiEvents() {
   (await webFrame.executeJavaScript(hookPlayerApiEventsScript))();
 }
 
+async function setupAudioAnalyzer() {
+  (await webFrame.executeJavaScript(audioAnalyzerScript))();
+
+  ipcRenderer.on("audioAnalyzer:control", async (_event, action: "start" | "stop") => {
+    (
+      await webFrame.executeJavaScript(`
+        (function() {
+          if (window.__YTMD_AUDIO_ANALYZER__) {
+            window.__YTMD_AUDIO_ANALYZER__.${action}();
+          }
+        })
+      `)
+    )();
+  });
+}
+
 function overrideHistoryButtonDisplay() {
-  // @ts-expect-error Style is reported as readonly but this still works
   document.querySelector<HTMLElement>("#history-link .history-button").style = "display: inline-block !important;";
 }
 
@@ -276,6 +293,7 @@ window.addEventListener("load", async () => {
   await createAdditionalPlayerBarControls();
   await hideChromecastButton();
   await hookPlayerApiEvents();
+  await setupAudioAnalyzer();
   overrideHistoryButtonDisplay();
 
   const integrationScripts: { [integrationName: string]: { [scriptName: string]: string } } = await ipcRenderer.invoke("ytmView:getIntegrationScripts");
@@ -567,6 +585,34 @@ window.addEventListener("load", async () => {
           `)
         )(index);
 
+        break;
+      }
+
+      case "focusSearch": {
+        (
+          await webFrame.executeJavaScript(`
+            (function() {
+              const searchBox = document.querySelector("ytmusic-search-box");
+              const input = searchBox?.querySelector("input");
+              const button = searchBox?.querySelector("button, tp-yt-paper-icon-button");
+
+              if (input) {
+                input.focus();
+                input.select?.();
+                return;
+              }
+
+              if (button instanceof HTMLElement) {
+                button.click();
+                setTimeout(() => {
+                  const nextInput = document.querySelector("ytmusic-search-box input");
+                  nextInput?.focus();
+                  nextInput?.select?.();
+                }, 100);
+              }
+            })
+          `)
+        )();
         break;
       }
 

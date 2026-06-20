@@ -3,18 +3,22 @@ import IconButton from "./IconButton.vue";
 import NowPlayingInfo from "./NowPlayingInfo.vue";
 import PlayerProgress from "./PlayerProgress.vue";
 import VuMeter from "./VuMeter.vue";
+import { VuMeterStyle, VuMeterTheme } from "~shared/store/schema";
 import { ShellActions, ShellTrack } from "./types";
 
 defineProps<{
   actions: ShellActions;
   track: ShellTrack;
   vuMeterEnabled: boolean;
+  audioData: number[];
+  theme: VuMeterTheme;
+  vuMeterStyle: VuMeterStyle;
 }>();
 </script>
 
 <template>
   <section class="compact-dock-player">
-    <div class="art"></div>
+    <div class="art"><img v-if="track.thumbnailUrl" :src="track.thumbnailUrl" alt="" /></div>
     <div class="details">
       <NowPlayingInfo :track="track" />
       <PlayerProgress :progress="track.progress" />
@@ -26,7 +30,7 @@ defineProps<{
       <IconButton icon="favorite" label="Like" @click="actions.toggleLike" />
       <IconButton icon="queue_music" label="Queue" />
     </div>
-    <VuMeter :enabled="vuMeterEnabled" />
+    <VuMeter :enabled="vuMeterEnabled" :active="track.isPlaying" :audio-data="audioData" :theme="theme" :style="vuMeterStyle" variant="compact" />
   </section>
 </template>
 
@@ -35,8 +39,8 @@ defineProps<{
   height: 104px;
   padding: 12px 16px;
   display: grid;
-  grid-template-columns: 56px minmax(160px, 1fr) auto 84px;
-  gap: 12px;
+  grid-template-columns: 56px minmax(180px, 1fr) auto 132px;
+  gap: 14px;
   align-items: center;
   background: rgba(12, 12, 12, 0.98);
   border-top: 1px solid #292929;
@@ -47,6 +51,14 @@ defineProps<{
   height: 56px;
   border-radius: 8px;
   background: linear-gradient(135deg, #b51d2d, #181818);
+  overflow: hidden;
+}
+
+.art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .details {

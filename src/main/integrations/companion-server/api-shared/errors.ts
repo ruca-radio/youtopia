@@ -1,4 +1,4 @@
-import createError, { FastifyError } from "@fastify/error";
+import { createError, FastifyError } from "@fastify/error";
 import { RepeatMode } from "../../../player-state-store";
 
 const errorCodes = [
@@ -32,7 +32,7 @@ export const AuthorizationTooManyError = createError<[]>("AUTHORIZATION_TOO_MANY
 export const YouTubeMusicUnavailableError = createError<[]>("YOUTUBE_MUSIC_UNVAILABLE", "YouTube Music is currently unvailable", 503);
 export const YouTubeMusicTimeOutError = createError<[]>("YOUTUBE_MUSIC_TIME_OUT", "Response from YouTube Music took too long", 504);
 
-export function isDefinedAPIError(error: FastifyError): boolean {
-  if (errorCodes.includes(error.code)) return true;
-  return false;
+export function isDefinedAPIError(error: unknown): error is FastifyError {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  return errorCodes.includes((error as FastifyError).code);
 }

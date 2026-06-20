@@ -1,12 +1,13 @@
-<script setup lang="ts" generic="T extends 'checkbox' | 'file' | 'range' | 'select' | 'custom'">
+<script setup lang="ts" generic="T extends 'checkbox' | 'file' | 'range' | 'select' | 'text' | 'custom'">
 import { computed, ref } from "vue";
 
 type ModelValue = {
   checkbox: boolean;
   file: string;
   range: number;
+  text: string;
   custom: never;
-  select: number;
+  select: number | string;
 };
 
 const props = defineProps<{
@@ -24,7 +25,7 @@ const props = defineProps<{
   disabledMessage?: string;
   flexColumn?: boolean;
   beta?: boolean;
-  optionsMap?: { [key: number]: string }; // This is for the select menu
+  optionsMap?: { [key: number | string]: string }; // This is for the select menu
 }>();
 const emit = defineEmits(["update:modelValue", "file-change", "change", "clear"]);
 
@@ -50,7 +51,8 @@ const selectedOption = computed(() => {
 
 // This function should be using ModelValue[T] but because it's bound to @click it doesn't interpret it as correct
 function select(optionKey: string) {
-  value.value = Number.parseInt(optionKey) as ModelValue[T];
+  const numericOption = Number.parseInt(optionKey);
+  value.value = (Number.isNaN(numericOption) ? optionKey : numericOption) as ModelValue[T];
   selectOpen.value = false;
   emit("change");
 }

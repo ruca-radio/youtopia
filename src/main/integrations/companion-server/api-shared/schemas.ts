@@ -71,6 +71,21 @@ export const APIV1CommandRequestBody = Type.Union([
 ]);
 export type APIV1CommandRequestBodyType = Static<typeof APIV1CommandRequestBody>;
 
+export const APIV1AudioDirectorPlanRequestBody = Type.Object({
+  prompt: Type.String({
+    minLength: 1,
+    maxLength: 500
+  }),
+  execute: Type.Optional(Type.Boolean()),
+  maxActions: Type.Optional(
+    Type.Number({
+      minimum: 1,
+      maximum: 8
+    })
+  )
+});
+export type APIV1AudioDirectorPlanRequestBodyType = Static<typeof APIV1AudioDirectorPlanRequestBody>;
+
 export const APIV1RequestCodeBody = Type.Object({
   appId: Type.String({
     format: "regex",

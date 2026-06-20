@@ -1,3 +1,5 @@
+import { PlayerLayout, TopBarLayout } from "~shared/store/schema";
+
 export type ShellActions = {
   focusSearch: () => void;
   navigateHome: () => void;
@@ -6,6 +8,9 @@ export type ShellActions = {
   openSettings: () => void;
   playPause: () => void;
   previous: () => void;
+  restoreFromMiniPlayer: () => void;
+  setPlayerLayout: (layout: PlayerLayout) => void;
+  setTopBarLayout: (layout: TopBarLayout) => void;
   toggleDislike: () => void;
   toggleLike: () => void;
   volumeDown: () => void;
@@ -18,6 +23,7 @@ export type ShellTrack = {
   durationLabel: string;
   isPlaying: boolean;
   progress: number;
+  thumbnailUrl: string;
   title: string;
   volume: number;
 };
@@ -28,6 +34,7 @@ export const placeholderTrack: ShellTrack = {
   durationLabel: "--:--",
   isPlaying: false,
   progress: 0,
+  thumbnailUrl: "",
   title: "Nothing playing",
   volume: 64
 };

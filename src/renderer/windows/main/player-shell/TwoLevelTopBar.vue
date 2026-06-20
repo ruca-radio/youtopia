@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import IconButton from "./IconButton.vue";
+import { PlayerLayout, TopBarLayout } from "~shared/store/schema";
 import { ShellActions } from "./types";
 
 defineProps<{
   actions: ShellActions;
+  activePlayerLayout: PlayerLayout;
+  activeTopBarLayout: TopBarLayout;
 }>();
 </script>
 
@@ -17,14 +20,39 @@ defineProps<{
       </div>
 
       <div class="center" aria-label="Player mode shortcuts">
-        <IconButton icon="vertical_align_bottom" label="Compact Dock" />
-        <IconButton icon="splitscreen_bottom" label="Expanded Strip" />
-        <IconButton icon="view_sidebar" label="Control Console" />
+        <IconButton
+          icon="vertical_align_bottom"
+          label="Compact Dock"
+          :disabled="activePlayerLayout === PlayerLayout.CompactDock"
+          @click="actions.setPlayerLayout(PlayerLayout.CompactDock)"
+        />
+        <IconButton
+          icon="splitscreen_bottom"
+          label="Expanded Strip"
+          :disabled="activePlayerLayout === PlayerLayout.ExpandedStrip"
+          @click="actions.setPlayerLayout(PlayerLayout.ExpandedStrip)"
+        />
+        <IconButton
+          icon="view_sidebar"
+          label="Control Console"
+          :disabled="activePlayerLayout === PlayerLayout.ControlConsole"
+          @click="actions.setPlayerLayout(PlayerLayout.ControlConsole)"
+        />
+        <IconButton
+          icon="equalizer"
+          label="Fullscreen VU"
+          :disabled="activePlayerLayout === PlayerLayout.FullscreenVu"
+          @click="actions.setPlayerLayout(PlayerLayout.FullscreenVu)"
+        />
       </div>
 
       <div class="right">
-        <IconButton icon="equalizer" label="Meters" />
         <IconButton icon="queue_music" label="Queue" />
+        <IconButton
+          :icon="activeTopBarLayout === TopBarLayout.Command ? 'view_agenda' : 'toolbar'"
+          label="Switch top bar"
+          @click="actions.setTopBarLayout(activeTopBarLayout === TopBarLayout.Command ? TopBarLayout.TwoLevel : TopBarLayout.Command)"
+        />
         <IconButton icon="settings" label="Settings" @click="actions.openSettings" />
         <IconButton icon="picture_in_picture_alt" label="Mini-player" @click="actions.openMiniPlayer" />
         <slot name="window-controls"></slot>
@@ -36,6 +64,9 @@ defineProps<{
         <span class="material-symbols-outlined">search</span>
         <span>Search, explore, build playlists</span>
       </button>
+      <div class="system-slot">
+        <slot name="system-status"></slot>
+      </div>
       <nav>
         <button @click="actions.focusSearch">Explore</button>
         <button @click="actions.focusSearch">Library</button>
@@ -91,11 +122,15 @@ defineProps<{
   height: 54px;
   padding: 0 16px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-columns: minmax(240px, 1fr) minmax(168px, 220px) auto;
   align-items: center;
   gap: 12px;
   background: #101010;
   border-top: 1px solid #1d1d1d;
+}
+
+.system-slot {
+  min-width: 0;
 }
 
 .search {
