@@ -1,0 +1,33 @@
+%define _topdir <% lintdir %>
+
+Name: <% name %>
+Version: <% version %>
+Release: <% release %>
+Summary: <% summary %>
+License: <% license %>
+Group: <% group %>
+URL: <% homepage %>
+
+AutoReqProv: no
+
+%description
+<% description %>
+
+%prep
+
+%build
+
+%install
+rm -rf %{buildroot}
+mkdir -p %{buildroot}/usr/
+# FIXED LINE FOR RPM 4.20+ COMPATIBILITY
+cp <%= process.platform === 'darwin' ? '-R' : '-r' %> ../usr/. %{buildroot}/usr/
+
+%clean
+rm -rf %{buildroot}
+
+%files
+%defattr(-,root,root,-)
+/usr/
+
+%changelog

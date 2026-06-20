@@ -26,10 +26,13 @@
 
   var sourceNode = null;
   var compressorNode = null;
+  var makeupGainNode = null;
   var analyzerNode = null;
   var animationId = null;
   var currentMediaElement = null;
   var isRunning = false;
+  var zeroFrameCount = 0;
+  var ZERO_FRAME_REBUILD_THRESHOLD = 30;
 
   var compressorSettings = {
     enabled: true,
@@ -80,11 +83,16 @@
       try { compressorNode.disconnect(); } catch (e) {}
       compressorNode = null;
     }
+    if (makeupGainNode) {
+      try { makeupGainNode.disconnect(); } catch (e) {}
+      makeupGainNode = null;
+    }
     if (analyzerNode) {
       try { analyzerNode.disconnect(); } catch (e) {}
       analyzerNode = null;
     }
     currentMediaElement = null;
+    zeroFrameCount = 0;
   }
 
   function getCapturedStream(mediaElement) {
@@ -150,9 +158,14 @@
         compressorNode.ratio.setValueAtTime(compressorSettings.ratio, audioContext.currentTime);
         compressorNode.attack.setValueAtTime(compressorSettings.attack, audioContext.currentTime);
         compressorNode.release.setValueAtTime(compressorSettings.release, audioContext.currentTime);
+        // FM-style makeup gain after compression keeps the analyzer/WLED signal dense
+        // without routing processed audio back to the user's speakers.
+        makeupGainNode = audioContext.createGain();
+        makeupGainNode.gain.setValueAtTime(1.65, audioContext.currentTime);
 
         sourceNode.connect(compressorNode);
-        compressorNode.connect(analyzerNode);
+        compressorNode.connect(makeupGainNode);
+        makeupGainNode.connect(analyzerNode);
       } else {
         sourceNode.connect(analyzerNode);
       }
@@ -172,6 +185,21 @@
       if (connectAnalyzer() && analyzerNode) {
         var data = new Uint8Array(analyzerNode.frequencyBinCount);
         analyzerNode.getByteFrequencyData(data);
+        var sum = 0;
+        for (var i = 0; i < data.length; i++) {
+          sum += data[i];
+        }
+        var mediaElement = currentMediaElement || getMediaElement();
+        var playingWithTime = mediaElement && !mediaElement.paused && !mediaElement.ended && mediaElement.currentTime > 0;
+        if (sum === 0 && playingWithTime) {
+          zeroFrameCount += 1;
+          if (zeroFrameCount >= ZERO_FRAME_REBUILD_THRESHOLD) {
+            disconnectAnalyzer();
+            zeroFrameCount = 0;
+          }
+        } else if (sum > 0) {
+          zeroFrameCount = 0;
+        }
         window.ytmd.sendAudioData(Array.from(data));
       }
     });

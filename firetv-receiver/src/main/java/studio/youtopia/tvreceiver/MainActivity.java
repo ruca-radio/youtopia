@@ -5,10 +5,15 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -23,9 +28,11 @@ public final class MainActivity extends Activity {
     private static final long RECONNECT_DELAY_MS = 4000L;
 
     private WebView webView;
+    private View splashView;
     private boolean reloadOnResume;
     private final Handler reconnectHandler = new Handler(Looper.getMainLooper());
     private boolean reconnectScheduled;
+    private long splashShownAt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,6 +41,7 @@ public final class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setBackgroundDrawable(null);
 
+        FrameLayout rootView = new FrameLayout(this);
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
         webView.setKeepScreenOn(true);
@@ -69,13 +77,102 @@ public final class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 cancelReconnect();
+                hideSplashWhenReady();
             }
         });
-        setContentView(webView);
+        rootView.addView(webView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        splashView = createSplashView();
+        rootView.addView(splashView, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        setContentView(rootView);
 
         enterImmersiveMode();
         webView.requestFocus();
         webView.loadUrl(TV_URL);
+    }
+
+    private View createSplashView() {
+        splashShownAt = System.currentTimeMillis();
+        FrameLayout splash = new FrameLayout(this);
+        splash.setBackgroundColor(Color.BLACK);
+        splash.setClickable(true);
+
+        LinearLayout stack = new LinearLayout(this);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        stack.setGravity(Gravity.CENTER);
+        stack.setPadding(dp(40), dp(32), dp(40), dp(32));
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.splash_logo);
+        logo.setAdjustViewBounds(true);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        stack.addView(logo, new LinearLayout.LayoutParams(dp(320), dp(180)));
+
+        TextView title = new TextView(this);
+        title.setText("YOUTOPIA TV");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(26);
+        title.setGravity(Gravity.CENTER);
+        title.setLetterSpacing(0.12f);
+        stack.addView(title, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("syncing lights, music, and screen");
+        subtitle.setTextColor(0xFF94A3B8);
+        subtitle.setTextSize(14);
+        subtitle.setGravity(Gravity.CENTER);
+        stack.addView(subtitle, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        );
+        splash.addView(stack, params);
+        return splash;
+    }
+
+    private void hideSplashWhenReady() {
+        if (splashView == null || splashView.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - splashShownAt;
+        long delay = Math.max(0L, 900L - elapsed);
+        reconnectHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (splashView == null || splashView.getVisibility() != View.VISIBLE) {
+                    return;
+                }
+                splashView.animate()
+                    .alpha(0f)
+                    .setDuration(360L)
+                    .withEndAction(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (splashView != null) {
+                                splashView.setVisibility(View.GONE);
+                            }
+                        }
+                    })
+                    .start();
+            }
+        }, delay);
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void scheduleReconnect() {

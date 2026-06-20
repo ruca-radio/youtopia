@@ -692,7 +692,7 @@ function getTvDisplayHtml(): string {
 	      min-height: 0;
 	      padding: clamp(22px, 3vw, 48px);
 	      display: grid;
-	      grid-template-rows: auto minmax(0, 1fr) auto;
+		      grid-template-rows: auto minmax(0, 1fr) auto;
 	      gap: clamp(14px, 2.2vw, 30px);
 	    }
 	    .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: start; }
@@ -706,7 +706,8 @@ function getTvDisplayHtml(): string {
     .status-light.ok { background: #22c55e; border-color: rgba(134,239,172,.82); box-shadow: 0 0 0 5px rgba(34,197,94,.12), 0 0 22px rgba(34,197,94,.42); }
     .status-light.busy, .status-light.warn { background: #f59e0b; border-color: rgba(253,230,138,.82); box-shadow: 0 0 0 5px rgba(245,158,11,.12), 0 0 22px rgba(245,158,11,.38); }
     .status-light.bad { background: #ef4444; border-color: rgba(254,202,202,.82); box-shadow: 0 0 0 5px rgba(239,68,68,.13), 0 0 22px rgba(239,68,68,.42); }
-    .visualizer { min-height: 0; display: flex; align-items: end; justify-content: center; gap: clamp(8px, 1vw, 18px); }
+	    .meter-stage { position: relative; z-index: 1; min-height: 0; display: grid; align-self: stretch; overflow: hidden; box-sizing: border-box; padding-bottom: clamp(14px, 1.8vh, 24px); }
+    .visualizer { min-height: 0; height: 100%; display: flex; align-items: end; justify-content: center; gap: clamp(8px, 1vw, 18px); }
     .bar { width: clamp(12px, 2vw, 34px); min-height: 8px; border-radius: 10px 10px 4px 4px; background: linear-gradient(to top, var(--vu-low), var(--vu-mid) 62%, var(--vu-high)); opacity: .95; will-change: height; }
     .bar.fallback { opacity: .62; background: linear-gradient(to top, #334155, #475569 62%, #64748b); }
     body[data-vu-style="classicLed"] .bar { height: 82% !important; background: linear-gradient(to top, var(--vu-low) 0%, var(--vu-low) 55%, var(--vu-mid) 55%, var(--vu-mid) 78%, var(--vu-high) 78%); box-shadow: inset 0 0 0 2px rgba(0,0,0,.35); }
@@ -714,8 +715,8 @@ function getTvDisplayHtml(): string {
     body[data-vu-style="spectrumLine"] .visualizer { align-items: center; gap: 3px; }
     body[data-vu-style="spectrumLine"] .bar { width: clamp(7px, .8vw, 14px); border-radius: 999px; }
     body[data-vu-style="albumGlow"] .bar { box-shadow: 0 0 18px var(--vu-high), 0 0 40px rgba(255,255,255,.12); }
-    .bottom { display: grid; gap: 12px; }
-    .progress { height: 8px; border-radius: 999px; background: rgba(255,255,255,.10); overflow: hidden; }
+	    .bottom { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(420px, min(62vw, 1160px)) minmax(0, 1fr); grid-template-rows: 8px minmax(138px, auto) auto; align-items: end; column-gap: clamp(18px, 3vw, 52px); row-gap: clamp(16px, 1.8vh, 24px); min-height: clamp(204px, 24vh, 282px); padding-top: 0; background: linear-gradient(to bottom, rgba(0,0,0,.97), rgba(0,0,0,.88)); }
+	    .progress { grid-column: 1 / -1; grid-row: 1; align-self: end; height: 8px; border-radius: 999px; background: rgba(255,255,255,.10); overflow: hidden; }
     .progress span { display: block; height: 100%; width: 0%; border-radius: inherit; background: var(--accent); transition: width 250ms linear; }
 	    .control-row { display: flex; align-items: center; gap: 9px; min-height: 42px; }
 	    .audio-panel { color: #d8d8d8; }
@@ -740,30 +741,33 @@ function getTvDisplayHtml(): string {
     .pin-gate-card input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 22px; letter-spacing: .3em; text-align: center; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: #050505; color: #f5f5f5; }
     .pin-gate-card button { margin-top: 14px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f5f5f5; color: #050505; font: inherit; font-weight: 700; cursor: pointer; }
     .pin-gate-error { margin-top: 10px; color: #f87171; font-size: 13px; min-height: 16px; }
-    .audio-status { min-width: 0; color: #aaa; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .transport-panel { justify-content: center; }
+	    .audio-panel { grid-column: 2; grid-row: 2; }
+	    .audio-status { min-width: 0; color: #aaa; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	    .transport-panel { grid-column: 2; grid-row: 3; justify-content: center; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-    .message { min-height: 58px; max-height: 94px; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; color: #ddd; font-size: 18px; line-height: 1.28; }
+	    .ai-stage { grid-column: 1; grid-row: 2 / span 2; align-self: stretch; min-height: clamp(136px, 17vh, 208px); display: grid; grid-template-columns: 46px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 42px; gap: 12px 16px; align-items: start; padding: clamp(16px, 1.6vw, 24px) clamp(18px, 2.2vw, 34px); border-left: 2px solid color-mix(in srgb, var(--accent), transparent 34%); background: linear-gradient(90deg, rgba(255,255,255,.068), rgba(255,255,255,.022) 62%, transparent); color: #f2f2f2; }
+    .message { min-height: 0; max-height: none; display: contents; color: #f2f2f2; font-size: clamp(20px, 1.8vw, 30px); line-height: 1.22; }
     .provider-badge { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 9px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); overflow: hidden; color: #f5f5f5; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
     .provider-badge img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .provider-badge.logo { background: #050505; }
     body[data-logo-mode="off"] .provider-badge { display: none; }
-    body[data-logo-mode="off"] .message { grid-template-columns: minmax(0, 1fr); }
-    body[data-logo-mode="prominent"] .message { grid-template-columns: 58px minmax(0, 1fr); }
+    body[data-logo-mode="off"] .ai-stage { grid-template-columns: minmax(0, 1fr); }
+    body[data-logo-mode="prominent"] .ai-stage { grid-template-columns: 60px minmax(0, 1fr); }
     body[data-logo-mode="prominent"] .provider-badge { width: 58px; height: 58px; }
-    .message-copy { min-width: 0; display: grid; gap: 6px; }
-    .message-text { max-height: 46px; overflow: auto; scrollbar-width: none; }
+    .ai-stage-copy { min-width: 0; grid-column: 2; grid-row: 1; align-self: center; display: grid; gap: 8px; overflow: hidden; }
+    .message-copy { min-width: 0; display: contents; }
+    .message-text { max-height: 2.45em; overflow: hidden; scrollbar-width: none; }
     .message-text::-webkit-scrollbar { display: none; }
-    .meta { color: #999; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ticker { height: 28px; overflow: hidden; color: rgba(255,255,255,.78); font-size: 16px; white-space: nowrap; mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent); }
+    .meta { color: rgba(255,255,255,.55); font-size: clamp(12px, 1vw, 15px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ticker { grid-column: 1 / -1; grid-row: 2; height: 42px; align-self: end; overflow: hidden; color: rgba(255,255,255,.94); font-size: clamp(18px, 1.55vw, 26px); white-space: nowrap; mask-image: linear-gradient(to right, transparent, #000 4%, #000 95%, transparent); }
     .ticker span { display: inline-block; min-width: 100%; padding-left: 100%; animation: tickerScroll 28s linear infinite; }
     .ticker[hidden] { display: none; }
     @keyframes tickerScroll {
       from { transform: translateX(0); }
       to { transform: translateX(-100%); }
     }
-    body[data-caption-mode="off"] .message-copy { display: none; }
-    body[data-caption-mode="off"] .message { grid-template-columns: auto; justify-content: start; }
+    body[data-caption-mode="off"] .ai-stage-copy { display: none; }
+    body[data-caption-mode="off"] .ai-stage { grid-template-columns: auto; justify-content: start; }
     body[data-caption-mode="full"] .message-text { max-height: 72px; }
     body[data-visualizer-style="none"] .visualizer { visibility: hidden; }
     body[data-visualizer-style="vuDots"] .visualizer { align-items: center; }
@@ -791,13 +795,14 @@ function getTvDisplayHtml(): string {
     body[data-album-art-mode="hero"] .album-art { width: clamp(170px, 22vw, 310px); top: 50%; transform: translateY(-50%) scale(1); opacity: .95; }
     body[data-tv-layout="ambient"] .track-copy { opacity: .72; }
     body[data-tv-layout="artHero"] .track-copy { max-width: 58vw; }
-    body[data-tv-layout="lowHud"] main { grid-template-rows: auto 1fr auto; }
+    body[data-tv-layout="lowHud"] main { grid-template-rows: auto minmax(0, 1fr) auto; }
     body[data-tv-focus="albumArt"] .album-art { opacity: .98; }
     @media (max-width: 780px) {
       main { padding: 22px; }
       .top { grid-template-columns: 1fr; }
       .status-lights { justify-content: flex-start; }
       h1 { max-width: 100%; }
+      .bottom { grid-template-columns: minmax(0, 1fr); }
     }
   </style>
 </head>
@@ -827,9 +832,21 @@ function getTvDisplayHtml(): string {
         <span id="lights" class="status-light" role="img" aria-label="Lights unknown" title="Lights unknown"></span>
       </div>
     </section>
-    <section id="visualizer" class="visualizer" aria-hidden="true"></section>
-    <section class="bottom">
-      <div class="progress"><span id="progress"></span></div>
+	    <section class="meter-stage" aria-label="Audio meter and progress">
+	      <div id="visualizer" class="visualizer" aria-hidden="true"></div>
+	    </section>
+	    <section class="bottom">
+	      <div class="progress"><span id="progress"></span></div>
+	      <div class="ai-stage">
+        <div class="message">
+          <div id="providerBadge" class="provider-badge"><span id="providerFallback">...</span><img id="providerLogo" alt="" hidden /></div>
+          <div class="ai-stage-copy message-copy">
+            <div id="message" class="message-text">Open Youtopia and start playback.</div>
+            <div id="meta" class="meta">No lightshow data yet.</div>
+          </div>
+        </div>
+        <div id="ticker" class="ticker"><span id="tickerText">Youtopia AI is waiting for a track.</span></div>
+      </div>
       <div class="audio-panel control-row">
         <audio id="tvAudio" preload="none"></audio>
         <audio id="djGptAudio" autoplay></audio>
@@ -873,14 +890,6 @@ function getTvDisplayHtml(): string {
           <span class="sr-only">Like</span>
         </button>
       </div>
-      <div class="message">
-        <div id="providerBadge" class="provider-badge"><span id="providerFallback">...</span><img id="providerLogo" alt="" hidden /></div>
-        <div class="message-copy">
-          <div id="message" class="message-text">Open Youtopia and start playback.</div>
-          <div id="meta" class="meta">No lightshow data yet.</div>
-        </div>
-      </div>
-      <div id="ticker" class="ticker" hidden><span id="tickerText"></span></div>
     </section>
 	  </main>
 	  <script>
@@ -1041,6 +1050,17 @@ function getTvDisplayHtml(): string {
       const el = document.getElementById(id);
       const next = String(value || "");
       if (el.textContent !== next) el.textContent = next;
+    }
+    function buildAiStageText(lightss, state) {
+      const title = state && state.player ? String(state.player.title || "").trim() : "";
+      const artist = state && state.player ? String(state.player.artist || "").trim() : "";
+      const ticker = String(lightss.tickerMessage || "").trim();
+      const host = String(lightss.hostLine || "").trim();
+      const message = String(lightss.message || "").trim();
+      const status = lightss.lightStatus === "applied" ? "Lights live" : lightss.aiStatus === "planning" ? "Planning the next scene" : "";
+      const nowPlaying = title && artist ? title + " by " + artist : title;
+      const parts = [ticker, host, message, status, nowPlaying].filter(Boolean);
+      return parts.length ? parts.join("   /   ") : "Youtopia AI is waiting for a track.";
     }
     function providerName(provider) {
       const normalized = String(provider || "").toLowerCase();
@@ -1307,13 +1327,14 @@ function getTvDisplayHtml(): string {
 	        setStatusLight("lights", lightLabel(lightss), lightStatusClass(lightss));
 	        updateTextIfChanged("message", lightss.hostLine || lightss.message || "Waiting for AI lightshow status.");
 	        updateTextIfChanged("meta", lightss.provider && lightss.model ? lightss.provider + " / " + lightss.model : "No provider status yet.");
-	        const tickerMessage = String(lightss.tickerMessage || "").trim();
+	        const tickerMessage = buildAiStageText(lightss, state);
 	        const ticker = document.getElementById("ticker");
 	        const tickerText = document.getElementById("tickerText");
-	        ticker.hidden = tickerMessage.length === 0;
+	        ticker.hidden = false;
 	        if (tickerMessage !== lastTickerMessage) {
 	          lastTickerMessage = tickerMessage;
-	          tickerText.textContent = tickerMessage ? tickerMessage + "   /   " + tickerMessage : "";
+	          tickerText.textContent = tickerMessage + "   /   " + tickerMessage;
+	          tickerText.style.animationDuration = Math.max(18, Math.min(54, tickerMessage.length / 2.8)) + "s";
 	        }
 	    }
     async function pollState() {

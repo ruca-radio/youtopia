@@ -24,6 +24,8 @@ const OPENAI_TIMEOUT_MS = 20000;
 const OLLAMA_TIMEOUT_MS = 45000;
 const GEMINI_TIMEOUT_MS = 25000;
 const SKETCH_TIMEOUT_MS = 8000;
+const AUDIO_PROFILE_WAIT_MS = 1400;
+const AUDIO_PROFILE_POLL_MS = 120;
 const VISION_CAPABLE_PROVIDERS: LightssAiProvider[] = [LightssAiProvider.Gemini, LightssAiProvider.OpenAI, LightssAiProvider.OpenRouter];
 const AI_PLAN_STEP_COUNT = 4;
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -126,6 +128,17 @@ type AiLightshowContext = {
     mid: number;
     treble: number;
     bins: number[];
+  };
+  audioSignals: {
+    live: boolean;
+    energy: number;
+    bass: number;
+    mid: number;
+    treble: number;
+    dominantBand: string;
+    peakBin: number;
+    compactBins: number[];
+    guidance: string;
   };
   tvOutput: {
     vuStyle: RendererLightssVisualScene["vuStyle"];
@@ -419,20 +432,32 @@ export default class LightssIntegration implements IIntegration {
       `Lightss: starting parallel planning — WLED (${wledProvider.provider}/${wledProvider.model}), Canvas (${canvasProvider.provider}/${canvasProvider.model}), Host (${hostProvider.provider}/${hostProvider.model})`
     );
 
+    await this.waitForFreshAudioProfile();
     const context = await this.buildAiLightshowContext(state);
+    log.info(
+      `Lightss: WLED audioSignals live=${context.audioSignals.live} energy=${context.audioSignals.energy} bass=${context.audioSignals.bass} mid=${context.audioSignals.mid} treble=${context.audioSignals.treble} dominant=${context.audioSignals.dominantBand}`
+    );
+    const agentCollaboration = this.buildCollaborativeAgentBriefing(context);
     const userPrompt = JSON.stringify({
       song: context.song,
       audioProfile: context.audioProfile,
+      audioSignals: context.audioSignals,
+      wledController: this.buildWledControllerContext(context.wled),
       roomLighting: context.roomLighting,
-      tvOutput: context.tvOutput
+      tvOutput: context.tvOutput,
+      agentCollaboration
     });
 
-    const analystPreamble = this.getAnalystPreamble();
+    const analystPreamble = `${this.getAnalystPreamble()}\n\n${agentCollaboration.sharedBrief}`;
 
     const wledSystemPromptFromStore =
       (this.store.get("integrations.lightssWledPrompt") as string | null) ||
       [
         "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.",
+        "Coordinate with the TV Canvas Agent by choosing colors the TV can reuse for accentColor, vuLowColor, vuMidColor, and vuHighColor.",
+        "Coordinate with the VJ Host Agent by making each step reason clear enough to become entertaining on-screen copy.",
+        "Use audioSignals.live, energy, bass, mid, treble, dominantBand, and compactBins as the current real audio signal. If live is true, prioritize those signals over genre guesses.",
+        "Use wledController.currentState, safeEffectNames, safePaletteNames, info, segmentCount, and audioReactive to understand what the actual controller can do.",
         "Return JSON matching the schema precisely.",
         "Rules: No strobe, blinking, or sudden flashing.",
         "Always soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.",
@@ -452,6 +477,8 @@ export default class LightssIntegration implements IIntegration {
       [
         "You are the Screen Drawing and TV Canvas Agent for an agentic display.",
         "Your role is to design premium TV layouts and visualizer styling.",
+        "Coordinate with the WLED Control Agent: keep TV colors aligned with the WLED primary/secondary light direction.",
+        "Coordinate with the VJ Host Agent: leave a stable lower-left AI ticker stage for generated host copy.",
         "Keep a true black base (#000000 background) for maximum contrast and TV protection.",
         "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
         "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.",
@@ -463,9 +490,10 @@ export default class LightssIntegration implements IIntegration {
       (this.store.get("integrations.lightssHostPrompt") as string | null) ||
       [
         "You are the late-night VJ and Scrolling Ticker Agent.",
-        "Generate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.",
+        "Generate scrolling facts, commentary, and status updates for the AI ticker stage.",
+        "Coordinate with the WLED Control Agent and TV Canvas Agent: describe the lights, colors, canvas, song energy, and transitions as one shared show.",
         "Write one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.",
-        "Write a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.",
+        "Write a ticker message as a single entertaining line with enough substance to scroll across the lower-left AI ticker stage.",
         "Return JSON matching the schema precisely."
       ].join("\n")
     }`;
@@ -566,12 +594,13 @@ export default class LightssIntegration implements IIntegration {
         aiStatus: "failed",
         lightStatus: "idle"
       });
-      return null;
+      return this.buildSafeFallbackPlan(state, "Full fallback plan");
     }
   }
 
   private async requestSketchPlan(state: PlayerState): Promise<AiLightshowPlan | null> {
     const provider = this.getSketchAiProvider();
+    await this.waitForFreshAudioProfile(900);
     const context = this.buildSketchContext(state);
     const albumArtUrl = context.song.albumArtUrl;
     const visionEnabled = Boolean(this.store.get("integrations.lightssVisionEnabled") ?? true);
@@ -601,6 +630,7 @@ export default class LightssIntegration implements IIntegration {
     const userPrompt = JSON.stringify({
       song: context.song,
       audioProfile: context.audioProfile,
+      audioSignals: this.buildWledAudioSignals(context.audioProfile),
       roomLighting: context.roomLighting,
       tvOutput: context.tvOutput,
       safetyRules: context.safetyRules
@@ -629,7 +659,7 @@ export default class LightssIntegration implements IIntegration {
       SKETCH_TIMEOUT_MS
     );
 
-    if (!result) return null;
+    if (!result) return this.buildSafeFallbackPlan(state, "Sketch fallback plan");
 
     const rawSteps: Partial<AiLightshowStep>[] = Array.isArray(result.steps) ? result.steps : [];
     const sanitizedSteps = rawSteps.map(step => this.sanitizeAiStep(step));
@@ -659,6 +689,88 @@ export default class LightssIntegration implements IIntegration {
       visualScene: this.sanitizeVisualScene(result.visualScene),
       tickerMessage: this.safeString(result.tickerMessage, "Sketch plan — full analysis loading..."),
       steps: sanitizedSteps
+    };
+  }
+
+  private buildSafeFallbackPlan(state: PlayerState, reason: string): AiLightshowPlan {
+    const context = this.buildSketchContext(state);
+    const audioProfile = context.audioProfile;
+    const energy = audioProfile.live ? audioProfile.energy : 0.45;
+    const bass = audioProfile.live ? audioProfile.bass : 0.4;
+    const primary: number[] = bass > 0.55 ? [255, 96, 48, 0] : [92, 152, 255, 0];
+    const secondary: number[] = energy > 0.58 ? [32, 220, 164, 0] : [180, 104, 255, 0];
+    const brightness = this.clampNumber(120 + energy * 70, 60, 190, 145);
+    const speed = this.clampNumber(76 + energy * 50, 45, 150, 96);
+    const intensity = this.clampNumber(72 + bass * 55, 45, 150, 98);
+    const baseStep = this.sanitizeAiStep({
+      reason: "Safe fallback plan applied",
+      brightness,
+      transitionMs: 1600,
+      effect: 98,
+      speed,
+      intensity,
+      palette: 0,
+      primaryColor: primary,
+      secondaryColor: secondary
+    });
+    const steps = [
+      baseStep,
+      this.sanitizeAiStep({ ...baseStep, reason: "Safe fallback color drift", transitionMs: 1800, effect: 90, brightness: brightness - 10 }),
+      this.sanitizeAiStep({ ...baseStep, reason: "Safe fallback soft lift", transitionMs: 1400, effect: 63, speed: speed + 10 }),
+      this.sanitizeAiStep({ ...baseStep, reason: "Safe fallback settle", transitionMs: 2000, effect: 98, intensity: intensity - 12 })
+    ];
+
+    return {
+      genre: "ambient",
+      mood: "steady",
+      bpm: this.clampNumber(88 + energy * 42, 70, 130, 96),
+      rationale: reason,
+      hostLine: "Local safe scene is holding the room while the AI planner catches up.",
+      displayTheme: this.sanitizeDisplayTheme(null, baseStep),
+      visualScene: this.safeDefaultVisualScene(),
+      tickerMessage: "Safe local lightshow active: slow transitions, no strobe, no blinking.",
+      steps
+    };
+  }
+
+  private buildCollaborativeAgentBriefing(context: AiLightshowContext): {
+    sharedBrief: string;
+    roles: { agent: string; responsibility: string; mustCoordinateWith: string[] }[];
+    outputSurface: string;
+  } {
+    const roles = [
+      {
+        agent: "WLED Control Agent",
+        responsibility: "Create safe, slow LED steps for the WLED wall-wash using colors the TV can mirror.",
+        mustCoordinateWith: ["TV Canvas Agent", "VJ Host Agent"]
+      },
+      {
+        agent: "TV Canvas Agent",
+        responsibility: "Create the TV theme, visualizer style, and fixed player layout around the WLED color direction.",
+        mustCoordinateWith: ["WLED Control Agent", "VJ Host Agent"]
+      },
+      {
+        agent: "VJ Host Agent",
+        responsibility: "Entertain viewers in the AI ticker stage with song-aware, light-aware, screen-aware scrolling copy.",
+        mustCoordinateWith: ["WLED Control Agent", "TV Canvas Agent"]
+      }
+    ];
+
+    return {
+      roles,
+      outputSurface: "AI ticker stage: lower-left TV real estate below the locked VU meter/progress rail.",
+      sharedBrief: [
+        "Shared agent briefing:",
+        `Song: ${context.song.title} by ${context.song.artist}.`,
+        `Audio signals: live=${context.audioSignals.live}, energy=${context.audioSignals.energy}, bass=${context.audioSignals.bass}, mid=${context.audioSignals.mid}, treble=${context.audioSignals.treble}, dominantBand=${context.audioSignals.dominantBand}.`,
+        `WLED controller: ${context.wled.host}; the WLED agent receives current state, controller info, safe effect names, safe palette names, and audioReactive capability context.`,
+        "All agents are building one synchronized private TV/lightshow, not separate outputs.",
+        "The WLED Control Agent owns safe LED steps and reasons.",
+        "The TV Canvas Agent owns screen colors, VU styling, and keeps the meter/progress rail stable.",
+        "The VJ Host Agent owns hostLine and tickerMessage for the AI ticker stage.",
+        "Every agent should assume the other two outputs will be merged into one plan, so names, colors, mood, timing, and safety language must agree.",
+        "No strobe, blinking, rapid flashing, or sudden high-contrast cuts."
+      ].join("\n")
     };
   }
 
@@ -766,7 +878,7 @@ export default class LightssIntegration implements IIntegration {
             ],
             generationConfig: {
               responseMimeType: "application/json",
-              responseSchema: schema
+              responseSchema: this.sanitizeGeminiResponseSchema(schema)
             }
           },
           timeout
@@ -795,7 +907,7 @@ export default class LightssIntegration implements IIntegration {
               },
               {
                 role: "user",
-                content: [{ type: "input_text", text: userPrompt }, ...(imageUrl ? [{ type: "input_image", image_url: { url: imageUrl } }] : [])]
+                content: [{ type: "input_text", text: userPrompt }, ...(imageUrl ? [{ type: "input_image", image_url: imageUrl }] : [])]
               }
             ],
             text: {
@@ -1226,6 +1338,18 @@ export default class LightssIntegration implements IIntegration {
     return typeof response.response === "string" ? response.response : null;
   }
 
+  private sanitizeGeminiResponseSchema(schema: JsonValue): JsonValue {
+    if (!schema || typeof schema !== "object") return schema;
+    if (Array.isArray(schema)) return schema.map(item => this.sanitizeGeminiResponseSchema(item));
+
+    const sanitized: { [key: string]: JsonValue } = {};
+    for (const [key, value] of Object.entries(schema)) {
+      if (key === "additionalProperties") continue;
+      sanitized[key] = this.sanitizeGeminiResponseSchema(value);
+    }
+    return sanitized;
+  }
+
   private emitAiMessage(
     title: string,
     message: string,
@@ -1494,6 +1618,97 @@ export default class LightssIntegration implements IIntegration {
     };
   }
 
+  private async waitForFreshAudioProfile(maxWaitMs = AUDIO_PROFILE_WAIT_MS): Promise<void> {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < maxWaitMs) {
+      const currentState = playerStateStore.getState();
+      const profile = getLatestTvAudioProfile();
+      if (currentState.trackState !== VideoState.Playing || profile.live) return;
+      await new Promise(resolve => setTimeout(resolve, AUDIO_PROFILE_POLL_MS));
+    }
+  }
+
+  private buildWledAudioSignals(audioProfile: AiLightshowContext["audioProfile"]): AiLightshowContext["audioSignals"] {
+    const bins = Array.isArray(audioProfile.bins) ? audioProfile.bins : [];
+    const compactBins = Array.from({ length: 8 }, (_value, index) => {
+      const start = Math.floor((index * bins.length) / 8);
+      const end = Math.max(start + 1, Math.floor(((index + 1) * bins.length) / 8));
+      const slice = bins.slice(start, end);
+      const average = slice.length ? slice.reduce((sum, value) => sum + value, 0) / slice.length : 0;
+      return Math.round(average);
+    });
+    let peakBin = 0;
+    let peakValue = -1;
+    bins.forEach((value, index) => {
+      if (value > peakValue) {
+        peakValue = value;
+        peakBin = index;
+      }
+    });
+    const dominantBand =
+      audioProfile.bass >= audioProfile.mid && audioProfile.bass >= audioProfile.treble ? "bass" : audioProfile.mid >= audioProfile.treble ? "mid" : "treble";
+
+    return {
+      live: audioProfile.live,
+      energy: audioProfile.energy,
+      bass: audioProfile.bass,
+      mid: audioProfile.mid,
+      treble: audioProfile.treble,
+      dominantBand,
+      peakBin,
+      compactBins,
+      guidance: audioProfile.live
+        ? "Use these live analyzer signals to choose WLED brightness, speed, intensity, and transition density."
+        : "Live analyzer bins were not ready; infer cautiously from metadata and keep WLED changes conservative."
+    };
+  }
+
+  private buildWledControllerContext(wled: AiLightshowContext["wled"]): JsonValue {
+    const snapshot = wled.snapshot && typeof wled.snapshot === "object" && !Array.isArray(wled.snapshot) ? (wled.snapshot as { [key: string]: JsonValue }) : {};
+    const state =
+      snapshot.state && typeof snapshot.state === "object" && !Array.isArray(snapshot.state) ? (snapshot.state as { [key: string]: JsonValue }) : {};
+    const info = snapshot.info && typeof snapshot.info === "object" && !Array.isArray(snapshot.info) ? (snapshot.info as { [key: string]: JsonValue }) : {};
+    const config =
+      snapshot.config && typeof snapshot.config === "object" && !Array.isArray(snapshot.config) ? (snapshot.config as { [key: string]: JsonValue }) : {};
+    const effects = Array.isArray(snapshot.effects) ? snapshot.effects : [];
+    const palettes = Array.isArray(snapshot.palettes) ? snapshot.palettes : [];
+    const segments = Array.isArray(state.seg) ? state.seg : [];
+    const audioReactive = state.AudioReactive || config.AudioReactive || null;
+
+    return {
+      host: wled.host,
+      reachable: this.isSuccessfulSnapshotValue(snapshot.state ?? null) || this.isSuccessfulSnapshotValue(snapshot.info ?? null),
+      info: {
+        version: info.ver ?? null,
+        brand: info.brand ?? null,
+        product: info.product ?? null,
+        leds: info.leds ?? null,
+        udpPort: info.udpport ?? null
+      },
+      currentState: {
+        on: state.on ?? null,
+        bri: state.bri ?? null,
+        transition: state.transition ?? null,
+        playlist: state.pl ?? null,
+        preset: state.ps ?? null,
+        mainSegment: state.mainseg ?? null,
+        segments
+      },
+      segmentCount: segments.length,
+      safeEffectIds: SAFE_EFFECTS,
+      safeEffectNames: SAFE_EFFECTS.map(id => ({ id, name: typeof effects[id] === "string" ? effects[id] : `Effect ${id}` })),
+      safePaletteIds: SAFE_PALETTES,
+      safePaletteNames: SAFE_PALETTES.map(id => ({ id, name: typeof palettes[id] === "string" ? palettes[id] : `Palette ${id}` })),
+      audioReactive,
+      controlRules: [
+        "Use only safeEffectIds and safePaletteIds.",
+        "Keep transition values high enough for slow morphs.",
+        "Keep brightness comfortable for a TV wall-wash.",
+        "Never request strobe, blink, flash, police, lightning, or other rapid high-contrast effects."
+      ]
+    };
+  }
+
   private async buildAiLightshowContext(state: PlayerState): Promise<AiLightshowContext> {
     const details = state.videoDetails;
     const wledSnapshot = await this.getWledSnapshot();
@@ -1501,6 +1716,7 @@ export default class LightssIntegration implements IIntegration {
     const durationSeconds = details?.durationSeconds ?? 0;
     const progressPercent = durationSeconds ? Math.min(100, Math.max(0, Math.round((state.videoProgress / durationSeconds) * 100))) : 0;
     const audioProfile = getLatestTvAudioProfile();
+    const audioSignals = this.buildWledAudioSignals(audioProfile);
 
     return {
       song: {
@@ -1518,6 +1734,7 @@ export default class LightssIntegration implements IIntegration {
         status: this.videoStateName(state.trackState)
       },
       audioProfile,
+      audioSignals,
       tvOutput: {
         vuStyle: this.currentVisualScene?.vuStyle ?? "bars",
         albumArtAvailable: Boolean(albumArtUrl),
@@ -1543,7 +1760,7 @@ export default class LightssIntegration implements IIntegration {
         role: "DJ-GPT can speak short, music-aware host lines and explain the current LED/TV scene without interrupting playback."
       },
       inferredMetadataInstructions:
-        "Infer BPM, genre, mood, energy, and color direction from title, artist, album, duration, progressPercent, audioProfile, albumArtAvailable, and current WLED state when explicit metadata is not available.",
+        "Infer BPM, genre, mood, energy, and color direction from title, artist, album, duration, progressPercent, audioProfile, audioSignals, albumArtAvailable, and current WLED state when explicit metadata is not available.",
       safetyRules: {
         noStrobe: true,
         noBlinkingEffects: true,

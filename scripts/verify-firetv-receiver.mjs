@@ -10,6 +10,8 @@ const checks = [
       /android\.intent\.category\.LEANBACK_LAUNCHER/,
       /android:screenOrientation="landscape"/,
       /android:exported="true"/,
+      /android:icon="@drawable\/ic_launcher"/,
+      /android:banner="@drawable\/banner"/,
     ],
   },
   {
@@ -29,7 +31,22 @@ const checks = [
       /previous/,
       /next/,
       /reload/,
+      /createSplashView/,
+      /hideSplashWhenReady/,
+      /R\.drawable\.splash_logo/,
     ],
+  },
+  {
+    file: "firetv-receiver/src/main/res/drawable/ic_launcher.xml",
+    patterns: [/vector/, /#000000/, /#22C55E/, /#D946EF/],
+  },
+  {
+    file: "firetv-receiver/src/main/res/drawable/splash_logo.xml",
+    patterns: [/vector/, /#22C55E/, /#D946EF/, /#F8FAFC/],
+  },
+  {
+    file: "firetv-receiver/src/main/res/drawable/banner.xml",
+    patterns: [/vector/, /#22C55E/, /#D946EF/, /#F8FAFC/],
   },
   {
     file: "scripts/build-firetv-receiver.sh",
