@@ -49,6 +49,10 @@ assertIncludes(schema, "lightssOpenRouterModel: string;");
 assertIncludes(schema, "lightssOpenRouterApiKey: string | null;");
 assertIncludes(schema, "lightssOllamaBaseUrl: string;");
 assertIncludes(schema, "lightssOllamaModel: string;");
+assertIncludes(schema, "lightssSketchProvider: LightssAiProvider;");
+assertIncludes(schema, "lightssSketchModel: string;");
+assertIncludes(schema, "lightssVisionEnabled: boolean;");
+assertIncludes(schema, "lightssStepIntervalMs: number;");
 assertIncludes(schema, "closeAction: CloseAction;");
 assertIncludes(schema, "minimizeAction: MinimizeAction;");
 
@@ -91,6 +95,9 @@ assertIncludes(settings, 'integrations.lightssOllamaBaseUrl ?? "http://10.27.27.
 assertIncludes(settings, 'integrations.lightssOllamaModel ?? "kimi-k2.7-code:cloud"');
 assertIncludes(settings, "integrations.lightssBridgePath ?? null");
 assertIncludes(settings, "integrations.lightssPythonPath ?? null");
+assertIncludes(settings, "integrations.lightssSketchProvider ?? LightssAiProvider.Gemini");
+assertIncludes(settings, 'integrations.lightssSketchModel ?? "gemini-2.5-flash"');
+assertIncludes(settings, "integrations.lightssVisionEnabled ?? true");
 assertIncludes(settings, "closeAction");
 assertIncludes(settings, "minimizeAction");
 
@@ -164,6 +171,11 @@ assertIncludes("src/main/integrations/lightss/index.ts", "buildOpenRouterLightsh
 assertIncludes("src/main/integrations/lightss/index.ts", "requestOllamaLightshowPlan");
 assertIncludes("src/main/integrations/lightss/index.ts", "emitAiMessage");
 assertIncludes("src/main/integrations/lightss/index.ts", "aiPlanRefreshedAt50");
+assertIncludes("src/main/integrations/lightss/index.ts", "SKETCH_TIMEOUT_MS");
+assertIncludes("src/main/integrations/lightss/index.ts", "VISION_CAPABLE_PROVIDERS");
+assertIncludes("src/main/integrations/lightss/index.ts", "requestSketchPlan");
+assertIncludes("src/main/integrations/lightss/index.ts", "kickOffBothPlans");
+assertIncludes("src/main/integrations/lightss/index.ts", "getStepIntervalMs");
 assertIncludes("src/main/integrations/lightss/index.ts", "OPENAI_API_KEY");
 assertIncludes("src/main/integrations/lightss/index.ts", "OPENROUTER_API_KEY");
 assertIncludes("src/main/integrations/lightss/index.ts", "AI WLED lightshow");
