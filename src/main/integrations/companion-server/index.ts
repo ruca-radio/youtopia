@@ -869,6 +869,10 @@ function getTvDisplayHtml(): string {
 	    let audioDelayMs = 0;
 	    let pendingAudioConnect = null;
 	    let audioStatusTimer = null;
+	    let preferredAudioFormat = "webm";
+	    let audioRecoveries = 0;
+	    let audioWaitingSince = 0;
+	    let audioRecoveryTimer = null;
 	    let djGptPeerConnection = null;
 	    let djGptDataChannel = null;
 	    function showHud(reason) {
@@ -1319,7 +1323,8 @@ function getTvDisplayHtml(): string {
 	    }
 	    async function connectTvAudio() {
 	      audioConnected = true;
-	      tvAudio.src = "/tv/audio?format=" + getPreferredAudioFormat() + "&ts=" + Date.now();
+	      preferredAudioFormat = preferredAudioFormat || getPreferredAudioFormat();
+	      tvAudio.src = "/tv/audio?format=" + preferredAudioFormat + "&ts=" + Date.now();
 	      tvAudio.muted = false;
 	      setButtonLabel(audioMute, "Mute TV");
 	      audioConnect.disabled = true;
@@ -1365,6 +1370,13 @@ function getTvDisplayHtml(): string {
 	    }
 	    function disconnectTvAudio() {
 	      audioConnected = false;
+	      audioRecoveries = 0;
+	      audioWaitingSince = 0;
+	      if (audioRecoveryTimer) {
+	        clearTimeout(audioRecoveryTimer);
+	        audioRecoveryTimer = null;
+	      }
+	      preferredAudioFormat = getPreferredAudioFormat();
 	      if (pendingAudioConnect) {
 	        clearTimeout(pendingAudioConnect);
 	        pendingAudioConnect = null;
@@ -1372,6 +1384,29 @@ function getTvDisplayHtml(): string {
 	      tvAudio.pause();
 	      tvAudio.removeAttribute("src");
 	      tvAudio.load();
+	    }
+	    function fallbackToMp3Audio(reason) {
+	      if (preferredAudioFormat === "mp3") return false;
+	      preferredAudioFormat = "mp3";
+	      audioRecoveries = 0;
+	      setAudioStatus("Switching TV audio to MP3", "busy");
+	      resyncTvAudio();
+	      return true;
+	    }
+	    function maybeAutoRecoverAudio(reason) {
+	      if (!audioConnected) return;
+	      if (audioRecoveryTimer) clearTimeout(audioRecoveryTimer);
+	      audioRecoveryTimer = setTimeout(() => {
+	        audioRecoveryTimer = null;
+	        if (!audioConnected) return;
+	        if (audioRecoveries < 1) {
+	          audioRecoveries += 1;
+	          setAudioStatus("Resyncing TV audio", "busy");
+	          resyncTvAudio();
+	          return;
+	        }
+	        fallbackToMp3Audio(reason || "buffering");
+	      }, 1400);
 	    }
 	    audioConnect.addEventListener("click", scheduleDelayedAudioConnect);
 	    djGptConnect.addEventListener("click", connectDjGptVoice);
@@ -1389,11 +1424,27 @@ function getTvDisplayHtml(): string {
 	      audioDelayMs = Math.min(3000, audioDelayMs + 250);
 	      setAudioStatus("Audio delay " + audioDelayMs + "ms", "ready");
 	    });
-	    tvAudio.addEventListener("playing", () => setAudioStatus("TV audio connected", "ok"));
-	    tvAudio.addEventListener("waiting", () => setAudioStatus("Buffering TV audio...", "busy"));
+	    tvAudio.addEventListener("playing", () => {
+	      audioWaitingSince = 0;
+	      if (audioRecoveryTimer) {
+	        clearTimeout(audioRecoveryTimer);
+	        audioRecoveryTimer = null;
+	      }
+	      audioRecoveries = 0;
+	      setAudioStatus("TV audio connected", "ok");
+	      scheduleHudHide("audio-playing");
+	    });
+	    tvAudio.addEventListener("waiting", () => {
+	      audioWaitingSince = audioWaitingSince || Date.now();
+	      setAudioStatus("Buffering TV audio", "busy");
+	      showHud("audio-buffering");
+	      maybeAutoRecoverAudio("waiting");
+	    });
 	    tvAudio.addEventListener("error", () => {
+	      if (fallbackToMp3Audio("error")) return;
 	      audioConnected = false;
 	      setAudioStatus("TV audio stream failed", "bad");
+	      showHud("audio-error");
 	    });
 	    window.addEventListener("pagehide", disconnectTvAudio);
 	    window.addEventListener("beforeunload", disconnectTvAudio);

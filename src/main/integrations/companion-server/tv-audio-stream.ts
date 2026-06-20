@@ -103,6 +103,10 @@ function getTvProgramFfmpegArgs(source: string, metadata: TvProgramMetadata): st
     "-nostdin",
     "-loglevel",
     "warning",
+    "-probesize",
+    "32",
+    "-analyzeduration",
+    "0",
     "-fflags",
     "nobuffer",
     "-flags",
@@ -114,7 +118,7 @@ function getTvProgramFfmpegArgs(source: string, metadata: TvProgramMetadata): st
     "-channels",
     "2",
     "-fragment_size",
-    "3840",
+    "960",
     "-i",
     source,
     "-filter_complex",
@@ -194,20 +198,22 @@ function getTvAudioFfmpegArgs(source: string, format: TvAudioFormat): string[] {
       "-application",
       "lowdelay",
       "-frame_duration",
-      "20",
+      "10",
       "-f",
       "webm",
       "-live",
       "1",
       "-cluster_time_limit",
-      "100",
+      "40",
+      "-cluster_size_limit",
+      "4096",
       "-flush_packets",
       "1",
       "pipe:1"
     ];
   }
 
-  return [...inputArgs, "-ar", "44100", "-codec:a", "libmp3lame", "-b:a", "128k", "-f", "mp3", "-write_xing", "0", "pipe:1"];
+  return [...inputArgs, "-ar", "44100", "-codec:a", "libmp3lame", "-b:a", "128k", "-f", "mp3", "-write_xing", "0", "-flush_packets", "1", "pipe:1"];
 }
 
 function escapeDrawText(value: string): string {
