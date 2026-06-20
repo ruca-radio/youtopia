@@ -36,6 +36,15 @@
   var forceResumeTimer = null;
   var FORCE_RESUME_INTERVAL_MS = 400;
 
+  // createMediaElementSource() may only be called ONCE per media element for the
+  // lifetime of the AudioContext; calling it again throws. Cache the source node
+  // per element so analyser rebuilds (track changes, compressor toggles) reuse it.
+  // Unlike captureStream(), a MediaElementSource removes the element's audio from
+  // the default output, so it MUST be routed to audioContext.destination or the
+  // user hears nothing. We therefore always connect a passthrough to destination.
+  var elementSourceMap = new WeakMap();
+  var passthroughToDestination = null;
+
   var compressorSettings = {
     enabled: true,
     threshold: -24,
@@ -77,8 +86,14 @@
   }
 
   function disconnectAnalyzer() {
+    // NOTE: never disconnect/null the cached MediaElementSource's path to destination
+    // here. That path is the only one carrying the element's audio to the speakers and
+    // the source cannot be recreated. We only detach + tear down the analyser branch.
     if (sourceNode) {
-      try { sourceNode.disconnect(); } catch (e) {}
+      try {
+        if (compressorNode) sourceNode.disconnect(compressorNode);
+        else if (analyzerNode) sourceNode.disconnect(analyzerNode);
+      } catch (e) {}
       sourceNode = null;
     }
     if (compressorNode) {
@@ -105,6 +120,28 @@
       return mediaElement.mozCaptureStream();
     }
     return null;
+  }
+
+  // Return a cached MediaElementSource for the element, creating it at most once.
+  // Also wires a guaranteed passthrough to destination so audible output never drops.
+  // Returns null if the element cannot be used as a source.
+  function getElementSource(mediaElement) {
+    var existing = elementSourceMap.get(mediaElement);
+    if (existing) return existing;
+    if (typeof audioContext.createMediaElementSource !== "function") return null;
+    try {
+      var node = audioContext.createMediaElementSource(mediaElement);
+      elementSourceMap.set(mediaElement, node);
+      if (!passthroughToDestination) {
+        passthroughToDestination = audioContext.createGain();
+        passthroughToDestination.gain.value = 1.0;
+        passthroughToDestination.connect(audioContext.destination);
+      }
+      node.connect(passthroughToDestination);
+      return node;
+    } catch (e) {
+      return null;
+    }
   }
 
   function ensureRunning() {
@@ -158,8 +195,13 @@
 
     disconnectAnalyzer();
 
-    var stream = getCapturedStream(mediaElement);
-    if (!stream) return false;
+    // Use a cached MediaElementSource instead of captureStream(). captureStream()
+    // could intermittently take over the element's audio output once the context
+    // actually resumed (leaving playback near-silent) and produced unreliable FFT.
+    // MediaElementSource is deterministic: the analyser is tapped off it and a
+    // guaranteed passthrough routes audio to destination so sound always plays.
+    var elementSource = getElementSource(mediaElement);
+    if (!elementSource) return false;
 
     // Attach listeners to the media element to resume context on playback events
     var onPlayEvent = function() {
@@ -173,7 +215,7 @@
     });
 
     try {
-      sourceNode = audioContext.createMediaStreamSource(stream);
+      sourceNode = elementSource;
       analyzerNode = audioContext.createAnalyser();
       analyzerNode.fftSize = 64;
       analyzerNode.smoothingTimeConstant = 0.75;
@@ -186,8 +228,10 @@
         compressorNode.ratio.setValueAtTime(compressorSettings.ratio, audioContext.currentTime);
         compressorNode.attack.setValueAtTime(compressorSettings.attack, audioContext.currentTime);
         compressorNode.release.setValueAtTime(compressorSettings.release, audioContext.currentTime);
-        // FM-style makeup gain after compression keeps the analyzer/WLED signal dense
-        // without routing processed audio back to the user's speakers.
+        // The analyser branch is a dead end (never connected to destination), so the
+        // compressor + makeup gain here only shape the signal feeding the FFT/WLED
+        // analysis -- never the audible output, which comes solely from the
+        // source -> passthrough -> destination path.
         makeupGainNode = audioContext.createGain();
         makeupGainNode.gain.setValueAtTime(1.65, audioContext.currentTime);
 
