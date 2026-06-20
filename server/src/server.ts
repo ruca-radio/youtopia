@@ -32,6 +32,9 @@ import type {
 import { REST_ROUTES } from "./contracts/index.js";
 import { logger } from "./logger.js";
 import { registerAuthRoutes } from "./auth/routes.js";
+// Pod B: catalog routes (registered before stubs so real handlers take precedence)
+import { registerSourceRoutes } from "./sources/routes.js";
+import type { LibraryService } from "./sources/library/index.js";
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -62,7 +65,11 @@ function makeStub(routeKey: string, method: string, path: string): StubHandler {
 // Factory
 // ---------------------------------------------------------------------------
 
-export async function buildApp(config: YouTopiaConfig): Promise<AppInstance> {
+export async function buildApp(
+  config: YouTopiaConfig,
+  /** Optional LibraryService — provided by Pod B plugin at boot (injected after plugins load). */
+  library?: LibraryService
+): Promise<AppInstance> {
   const fastify: FastifyInstance = Fastify({
     logger: {
       level: process.env["LOG_LEVEL"] ?? (process.env["NODE_ENV"] !== "production" ? "debug" : "info"),
@@ -101,8 +108,47 @@ export async function buildApp(config: YouTopiaConfig): Promise<AppInstance> {
   // ── Auth routes ───────────────────────────────────────────────────────────
   await registerAuthRoutes(fastify);
 
-  // ── REST_ROUTES stubs ─────────────────────────────────────────────────────
-  registerContractRouteStubs(fastify);
+  // ── Pod B catalog routes (before stubs — real handlers win) ──────────────
+  // NOTE (Pod B edit): registerSourceRoutes registers before the 501 stubs so
+  // GET /sources, /search, /tracks/:id, /albums/:id, /artists/:id, /playlists/:id
+  // return real data instead of 501. library may be undefined at buildApp time if
+  // plugins haven't loaded yet; in that case routes are omitted and stubs run.
+  // The preferred pattern is to call buildApp without library, then call
+  // registerSourceRoutes(fastify, library) directly from the plugin setup —
+  // but Fastify requires route registration before listen(). We therefore
+  // accept library as a parameter and defer to index.ts to pass it.
+  if (library) {
+    registerSourceRoutes(fastify, library);
+  }
+
+  // ── REST_ROUTES stubs (skip routes registered by Pod B and Pod D) ─────────
+  // POD B EDIT: pass skipRoutes so stub registration doesn't conflict.
+  // POD D EDIT: also skip session/room/zone routes — real handlers registered
+  //             by Pod D's plugin in loadAllPlugins().
+  const podBRoutes = new Set([
+    "/api/v1/sources",
+    "/api/v1/search",
+    "/api/v1/tracks/:id",
+    "/api/v1/albums/:id",
+    "/api/v1/artists/:id",
+    "/api/v1/playlists/:id",
+  ]);
+  // Pod D owns: sessions, transport, queue, dsp (session-level), rooms, zones, clock
+  const podDRoutes = new Set([
+    "/api/v1/sessions",
+    "/api/v1/sessions/:sid",
+    "/api/v1/sessions/:sid/now-playing",
+    "/api/v1/sessions/:sid/transport",
+    "/api/v1/sessions/:sid/queue",
+    "/api/v1/sessions/:sid/dsp",
+    "/api/v1/rooms",
+    "/api/v1/zones",
+    "/api/v1/zones/:zid/rooms",
+    "/api/v1/zones/:zid/session",
+    "/api/v1/rooms/:rid/clock",
+  ]);
+  const skipRoutes = new Set([...podBRoutes, ...podDRoutes]);
+  registerContractRouteStubs(fastify, library ? skipRoutes : podDRoutes);
 
   // ── Socket.IO ─────────────────────────────────────────────────────────────
   const httpServer = fastify.server as unknown as HttpServer;
@@ -131,6 +177,12 @@ export async function buildApp(config: YouTopiaConfig): Promise<AppInstance> {
     });
   });
 
+  // ── Attach io to fastify for plugin access (Pod D) ──────────────────────
+  // Plugins (Pod D session engine) call registerSessionSockets(fastify, ...)
+  // and need the io instance. Attaching it here avoids circular imports while
+  // keeping the AppInstance the primary return shape.
+  (fastify as unknown as { io: typeof io }).io = io;
+
   return { fastify, io };
 }
 
@@ -138,11 +190,17 @@ export async function buildApp(config: YouTopiaConfig): Promise<AppInstance> {
 // REST stub registration
 // ---------------------------------------------------------------------------
 
-function registerContractRouteStubs(fastify: FastifyInstance): void {
+function registerContractRouteStubs(
+  fastify: FastifyInstance,
+  skipPaths: Set<string> = new Set()
+): void {
   for (const [routeKey, routeValue] of Object.entries(REST_ROUTES) as Array<[string, string]>) {
     const spaceIdx = routeValue.indexOf(" ");
     const method = routeValue.slice(0, spaceIdx);
     const fastifyPath = routeValue.slice(spaceIdx + 1);
+
+    // POD B EDIT: skip routes that have real handlers registered above
+    if (skipPaths.has(fastifyPath)) continue;
 
     const stub = makeStub(routeKey, method, fastifyPath);
 

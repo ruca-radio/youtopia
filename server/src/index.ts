@@ -14,6 +14,11 @@ import { loadAllPlugins } from "./plugins/loader.js";
 import { SourceRegistry } from "./sources/registry.js";
 import { pruneExpiredTokens } from "./auth/token.js";
 import { logger } from "./logger.js";
+// Pod D: session/room engine plugin — registers itself via registerPlugin()
+import "./session/index.js";
+// Pod B: source plugin registration (side-effect import calls registerPlugin for each source)
+import "./sources/index.js";
+import { initLibraryService } from "./sources/library/index.js";
 
 async function main(): Promise<void> {
   // ── Config ────────────────────────────────────────────────────────────────
@@ -26,10 +31,15 @@ async function main(): Promise<void> {
   // ── Source registry ───────────────────────────────────────────────────────
   const registry = new SourceRegistry();
 
-  // ── App ───────────────────────────────────────────────────────────────────
-  const { fastify, io } = await buildApp(config);
+  // ── Library service (Pod B) ─────────────────────────────────────────────
+  // Initialized before buildApp so catalog routes can be registered.
+  // Registry is empty here; sources populate it in loadAllPlugins().
+  const library = initLibraryService(registry);
 
-  // ── Plugins ───────────────────────────────────────────────────────────────
+  // ── App (Pod B: pass library to wire catalog routes) ──────────────────
+  const { fastify, io } = await buildApp(config, library);
+
+  // ── Plugins (sources/DSP/rooms) ─────────────────────────────────────
   await loadAllPlugins({ fastify, registry, config, logger });
 
   // ── Token pruning (every 5 min) ───────────────────────────────────────────
