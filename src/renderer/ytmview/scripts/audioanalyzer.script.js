@@ -33,6 +33,8 @@
   var isRunning = false;
   var zeroFrameCount = 0;
   var ZERO_FRAME_REBUILD_THRESHOLD = 30;
+  var forceResumeTimer = null;
+  var FORCE_RESUME_INTERVAL_MS = 400;
 
   var compressorSettings = {
     enabled: true,
@@ -116,6 +118,32 @@
       }
     }
     return resumePromise || Promise.resolve();
+  }
+
+  // Autoplay policy can leave the AudioContext suspended until a user gesture occurs
+  // inside the ytmView. When that happens the analyser emits all-zero FFT frames and
+  // the TV VU meter falls back to its static placeholder bars. While the analyzer is
+  // meant to be running, keep attempting to resume the context on a short timer so it
+  // recovers on its own (e.g. as soon as playback or any qualifying event occurs)
+  // without requiring the user to interact with the desktop window.
+  function startForceResumeLoop() {
+    if (forceResumeTimer) return;
+    forceResumeTimer = setInterval(function() {
+      if (!isRunning) {
+        stopForceResumeLoop();
+        return;
+      }
+      if (audioContext && audioContext.state === "suspended") {
+        ensureRunning();
+      }
+    }, FORCE_RESUME_INTERVAL_MS);
+  }
+
+  function stopForceResumeLoop() {
+    if (forceResumeTimer) {
+      clearInterval(forceResumeTimer);
+      forceResumeTimer = null;
+    }
   }
 
   function connectAnalyzer() {
@@ -208,6 +236,12 @@
   }
 
   function start() {
+    // Always attempt a resume on start(), even if already running. The hub may
+    // re-assert "start" specifically to unstick a context that was created or left
+    // in a suspended state (autoplay policy), so an early return must not skip the
+    // resume attempt.
+    ensureRunning();
+    startForceResumeLoop();
     if (isRunning) return;
     isRunning = true;
     ensureRunning().then(function() {
@@ -217,6 +251,7 @@
 
   function stop() {
     isRunning = false;
+    stopForceResumeLoop();
     if (animationId) {
       cancelAnimationFrame(animationId);
       animationId = null;
