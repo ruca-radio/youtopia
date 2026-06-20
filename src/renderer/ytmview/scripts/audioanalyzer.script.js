@@ -3,40 +3,87 @@
     return;
   }
 
-  let audioContext = null;
-  let sourceNode = null;
-  let analyzerNode = null;
-  let animationId = null;
-  let currentMediaElement = null;
-  let isRunning = false;
+  // Create the AudioContext immediately while the load event's user activation
+  // is still fresh. Electron's autoplay-policy flag only covers media elements,
+  // not Web Audio API — without this eager creation + resume, the analyser
+  // produces all-zero FFT data and the TV VU meter stays dead.
+  var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  var resumePromise = null;
+  if (audioContext.state === "suspended") {
+    resumePromise = audioContext.resume().catch(function() {
+      resumePromise = null;
+    });
+  }
+
+  var resumeOnInteraction = function() {
+    if (audioContext && audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+  };
+  document.addEventListener("click", resumeOnInteraction, { once: true });
+  document.addEventListener("keydown", resumeOnInteraction, { once: true });
+  document.addEventListener("mousedown", resumeOnInteraction, { once: true });
+
+  var sourceNode = null;
+  var compressorNode = null;
+  var analyzerNode = null;
+  var animationId = null;
+  var currentMediaElement = null;
+  var isRunning = false;
+
+  var compressorSettings = {
+    enabled: true,
+    threshold: -24,
+    ratio: 12,
+    attack: 0.003,
+    release: 0.25
+  };
+
+  function updateCompressorSettings(settings) {
+    if (!settings) return;
+    var enabledChanged = settings.enabled !== undefined && settings.enabled !== compressorSettings.enabled;
+    compressorSettings = Object.assign(compressorSettings, settings);
+
+    if (compressorNode && audioContext) {
+      try {
+        if (compressorSettings.threshold !== undefined) compressorNode.threshold.setValueAtTime(compressorSettings.threshold, audioContext.currentTime);
+        if (compressorSettings.ratio !== undefined) compressorNode.ratio.setValueAtTime(compressorSettings.ratio, audioContext.currentTime);
+        if (compressorSettings.attack !== undefined) compressorNode.attack.setValueAtTime(compressorSettings.attack, audioContext.currentTime);
+        if (compressorSettings.release !== undefined) compressorNode.release.setValueAtTime(compressorSettings.release, audioContext.currentTime);
+      } catch (e) {
+        console.error("Failed to update compressor params:", e);
+      }
+    }
+
+    if (enabledChanged && isRunning && currentMediaElement) {
+      connectAnalyzer();
+    }
+  }
 
   function getMediaElement() {
-    const playerBar = document.querySelector("ytmusic-app-layout>ytmusic-player-bar");
+    var playerBar = document.querySelector("ytmusic-app-layout>ytmusic-player-bar");
     if (playerBar && playerBar.playerApi && playerBar.playerApi.getPlayerNode) {
-      const node = playerBar.playerApi.getPlayerNode();
+      var node = playerBar.playerApi.getPlayerNode();
       if (node && (node.tagName === "VIDEO" || node.tagName === "AUDIO")) {
         return node;
       }
     }
-
     return document.querySelector("video") || document.querySelector("audio");
   }
 
   function disconnectAnalyzer() {
     if (sourceNode) {
-      try {
-        sourceNode.disconnect();
-      } catch {}
+      try { sourceNode.disconnect(); } catch (e) {}
       sourceNode = null;
     }
-
+    if (compressorNode) {
+      try { compressorNode.disconnect(); } catch (e) {}
+      compressorNode = null;
+    }
     if (analyzerNode) {
-      try {
-        analyzerNode.disconnect();
-      } catch {}
+      try { analyzerNode.disconnect(); } catch (e) {}
       analyzerNode = null;
     }
-
     currentMediaElement = null;
   }
 
@@ -44,43 +91,75 @@
     if (typeof mediaElement.captureStream === "function") {
       return mediaElement.captureStream();
     }
-
     if (typeof mediaElement.mozCaptureStream === "function") {
       return mediaElement.mozCaptureStream();
     }
-
     return null;
   }
 
+  function ensureRunning() {
+    if (audioContext.state === "suspended") {
+      if (!resumePromise) {
+        resumePromise = audioContext.resume().then(function() {
+          resumePromise = null;
+        }).catch(function() {
+          resumePromise = null;
+        });
+      }
+    }
+    return resumePromise || Promise.resolve();
+  }
+
   function connectAnalyzer() {
-    const mediaElement = getMediaElement();
+    var mediaElement = getMediaElement();
     if (!mediaElement) return false;
-    if (mediaElement === currentMediaElement && analyzerNode) return true;
+
+    var needsRebuild = false;
+    if (compressorSettings.enabled && !compressorNode) needsRebuild = true;
+    if (!compressorSettings.enabled && compressorNode) needsRebuild = true;
+
+    if (mediaElement === currentMediaElement && analyzerNode && !needsRebuild) return true;
 
     disconnectAnalyzer();
 
-    const stream = getCapturedStream(mediaElement);
+    var stream = getCapturedStream(mediaElement);
     if (!stream) return false;
 
+    // Attach listeners to the media element to resume context on playback events
+    var onPlayEvent = function() {
+      if (audioContext && audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+    };
+    ["play", "playing", "timeupdate"].forEach(function(evt) {
+      mediaElement.removeEventListener(evt, onPlayEvent);
+      mediaElement.addEventListener(evt, onPlayEvent);
+    });
+
     try {
-      if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      }
-
-      if (audioContext.state === "suspended") {
-        audioContext.resume().catch(() => {});
-      }
-
       sourceNode = audioContext.createMediaStreamSource(stream);
       analyzerNode = audioContext.createAnalyser();
       analyzerNode.fftSize = 64;
       analyzerNode.smoothingTimeConstant = 0.75;
       analyzerNode.minDecibels = -90;
       analyzerNode.maxDecibels = -10;
-      sourceNode.connect(analyzerNode);
+
+      if (compressorSettings.enabled) {
+        compressorNode = audioContext.createDynamicsCompressor();
+        compressorNode.threshold.setValueAtTime(compressorSettings.threshold, audioContext.currentTime);
+        compressorNode.ratio.setValueAtTime(compressorSettings.ratio, audioContext.currentTime);
+        compressorNode.attack.setValueAtTime(compressorSettings.attack, audioContext.currentTime);
+        compressorNode.release.setValueAtTime(compressorSettings.release, audioContext.currentTime);
+
+        sourceNode.connect(compressorNode);
+        compressorNode.connect(analyzerNode);
+      } else {
+        sourceNode.connect(analyzerNode);
+      }
+
       currentMediaElement = mediaElement;
       return true;
-    } catch (error) {
+    } catch (e) {
       disconnectAnalyzer();
       return false;
     }
@@ -89,14 +168,13 @@
   function sendFrequencyData() {
     if (!isRunning) return;
 
-    if (connectAnalyzer() && analyzerNode) {
-      if (audioContext && audioContext.state === "suspended") {
-        audioContext.resume().catch(() => {});
+    ensureRunning().then(function() {
+      if (connectAnalyzer() && analyzerNode) {
+        var data = new Uint8Array(analyzerNode.frequencyBinCount);
+        analyzerNode.getByteFrequencyData(data);
+        window.ytmd.sendAudioData(Array.from(data));
       }
-      const data = new Uint8Array(analyzerNode.frequencyBinCount);
-      analyzerNode.getByteFrequencyData(data);
-      window.ytmd.sendAudioData(Array.from(data));
-    }
+    });
 
     animationId = requestAnimationFrame(sendFrequencyData);
   }
@@ -104,24 +182,20 @@
   function start() {
     if (isRunning) return;
     isRunning = true;
-
-    if (audioContext && audioContext.state === "suspended") {
-      audioContext.resume().catch(() => {});
-    }
-
-    sendFrequencyData();
+    ensureRunning().then(function() {
+      sendFrequencyData();
+    });
   }
 
   function stop() {
     isRunning = false;
-
     if (animationId) {
       cancelAnimationFrame(animationId);
       animationId = null;
     }
-
     disconnectAnalyzer();
   }
 
   window.__YTMD_AUDIO_ANALYZER__ = { start, stop };
+  window.__YTMD_AUDIO_ANALYZER__.updateCompressorSettings = updateCompressorSettings;
 })

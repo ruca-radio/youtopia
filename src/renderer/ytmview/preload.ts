@@ -179,6 +179,46 @@ async function hookPlayerApiEvents() {
 async function setupAudioAnalyzer() {
   (await webFrame.executeJavaScript(audioAnalyzerScript))();
 
+  // Send initial compressor settings to the analyzer
+  try {
+    const integrations = (await store.get("integrations")) as StoreSchema["integrations"];
+    if (integrations) {
+      const config = {
+        enabled: integrations.audioCompressorEnabled,
+        threshold: integrations.audioCompressorThreshold,
+        ratio: integrations.audioCompressorRatio,
+        attack: integrations.audioCompressorAttack,
+        release: integrations.audioCompressorRelease
+      };
+      await webFrame.executeJavaScript(`
+        if (window.__YTMD_AUDIO_ANALYZER__ && window.__YTMD_AUDIO_ANALYZER__.updateCompressorSettings) {
+          window.__YTMD_AUDIO_ANALYZER__.updateCompressorSettings(${JSON.stringify(config)});
+        }
+      `);
+    }
+  } catch (e) {
+    console.error("Failed to apply initial compressor settings:", e);
+  }
+
+  // Subscribe to changes to live-update compressor settings
+  store.onDidAnyChange(async newState => {
+    const integrations = newState.integrations;
+    if (integrations) {
+      const config = {
+        enabled: integrations.audioCompressorEnabled,
+        threshold: integrations.audioCompressorThreshold,
+        ratio: integrations.audioCompressorRatio,
+        attack: integrations.audioCompressorAttack,
+        release: integrations.audioCompressorRelease
+      };
+      await webFrame.executeJavaScript(`
+        if (window.__YTMD_AUDIO_ANALYZER__ && window.__YTMD_AUDIO_ANALYZER__.updateCompressorSettings) {
+          window.__YTMD_AUDIO_ANALYZER__.updateCompressorSettings(${JSON.stringify(config)});
+        }
+      `);
+    }
+  });
+
   ipcRenderer.on("audioAnalyzer:control", async (_event, action: "start" | "stop") => {
     (
       await webFrame.executeJavaScript(`
@@ -240,6 +280,12 @@ window.addEventListener("load", async () => {
     }
     return;
   }
+
+  // Create the AudioContext immediately while the load event's user activation
+  // is still fresh. Electron's autoplay-policy flag only covers media elements,
+  // not Web Audio API — without this eager creation + resume, the analyser
+  // produces all-zero FFT data and the TV VU meter stays dead.
+  await setupAudioAnalyzer();
 
   await new Promise<void>(resolve => {
     const interval = setInterval(async () => {
