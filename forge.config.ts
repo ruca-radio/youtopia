@@ -2,7 +2,6 @@ import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
-import { MakerRpm } from "@electron-forge/maker-rpm";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
@@ -50,13 +49,6 @@ const config: ForgeConfig = {
       iconUrl: `https://raw.githubusercontent.com/${process.env.YTMD_UPDATE_FEED_OWNER ?? "ruca-radio"}/${process.env.YTMD_UPDATE_FEED_REPOSITORY ?? "youtopia"}/137c4e5c175c8c125cbcca9a5312611f80cd3bd9/src/assets/icons/ytmd.ico`
     }),
     new MakerZIP({}, ["darwin"]),
-    new MakerRpm({
-      options: {
-        categories: ["AudioVideo", "Audio"],
-        mimeType: ["x-scheme-handler/ytmd"],
-        icon: "./src/assets/icons/ytmd.png"
-      }
-    }),
     new MakerDeb({
       options: {
         categories: ["AudioVideo", "Audio"],
