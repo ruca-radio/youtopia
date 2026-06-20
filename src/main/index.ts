@@ -27,6 +27,7 @@ import electronSquirrelStartup from "electron-squirrel-startup";
 import MemoryStore from "./memory-store";
 import playerStateStore, { PlayerState, VideoState } from "./player-state-store";
 import { updateTvAppearance, updateTvAudioData, updateTvLightssMessage } from "./tv-display-state";
+import { addAudioAnalyzerSubscriber, provideAudioAnalyzerView, removeAudioAnalyzerSubscriber, resyncAudioAnalyzerView } from "./audio-analyzer-hub";
 import { RendererPlayerState, RendererVideoState } from "../shared/player";
 import {
   CloseAction,
@@ -1356,6 +1357,7 @@ const createYTMView = (): void => {
   customCss.provide(store, ytmView);
   lightss.provide(store, memoryStore, ytmView);
   ratioVolume.provide(ytmView);
+  provideAudioAnalyzerView(() => ytmView);
 
   // Attach events to ytm view
   ytmView.webContents.on("will-navigate", event => {
@@ -1838,17 +1840,13 @@ app.on("ready", async () => {
   ipcMain.on("audioAnalyzer:subscribe", event => {
     if (!mainWindow || event.sender !== mainWindow.webContents) return;
     audioAnalyzerSubscribed = true;
-    if (!ytmView) return;
-
-    ytmView.webContents.send("audioAnalyzer:control", "start");
+    addAudioAnalyzerSubscriber("desktop");
   });
 
   ipcMain.on("audioAnalyzer:unsubscribe", event => {
     if (!mainWindow || event.sender !== mainWindow.webContents) return;
     audioAnalyzerSubscribed = false;
-    if (!ytmView) return;
-
-    ytmView.webContents.send("audioAnalyzer:control", "stop");
+    removeAudioAnalyzerSubscriber("desktop");
   });
 
   ipcMain.on("mainWindow:openMiniPlayer", event => {
@@ -1939,6 +1937,9 @@ app.on("ready", async () => {
       if (audioAnalyzerSubscribed) {
         ytmView.webContents.send("audioAnalyzer:control", "start");
       }
+      // Resume the analyzer for any active surface (desktop or TV display) after the
+      // ytmView navigates, so the TV VU meter keeps moving without a desktop toggle.
+      resyncAudioAnalyzerView();
     }
   });
 
