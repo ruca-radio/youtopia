@@ -12,6 +12,7 @@ import { AuthToken } from "~shared/integrations/companion-server/types";
 import { RemoteSocket } from "socket.io";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
 import cors from "@fastify/cors";
+import { fastifyRateLimit } from "@fastify/rate-limit";
 import crypto from "crypto";
 import MemoryStore from "../../memory-store";
 import log from "electron-log";
@@ -100,6 +101,11 @@ export default class CompanionServer implements IIntegration {
     this.fastifyServer = Fastify().withTypeProvider<TypeBoxTypeProvider>();
     this.fastifyServer.addContentTypeParser(["application/sdp", "text/plain"], { parseAs: "string" }, (_request, body, done) => {
       done(null, body);
+    });
+    // Rate limiting is opt-in per route (global: false) so it only guards the
+    // PIN-protected TV control endpoints against brute-force attempts.
+    this.fastifyServer.register(fastifyRateLimit, {
+      global: false
     });
     this.fastifyServer.register(cors, {
       origin: this.store.get<"integrations.companionServerCORSWildcardEnabled", boolean>("integrations.companionServerCORSWildcardEnabled", false) ? "*" : false
@@ -274,7 +280,7 @@ export default class CompanionServer implements IIntegration {
       });
       program.process.stdout.pipe(reply.raw);
     });
-    this.fastifyServer.post("/tv/dj-gpt/session", async (request, reply) => {
+    this.fastifyServer.post("/tv/dj-gpt/session", { config: { rateLimit: { max: 10, timeWindow: 1000 * 60 } } }, async (request, reply) => {
       if (!this.isTvControlAuthorized(request)) {
         reply.code(401).send({ error: "Invalid or missing TV control PIN" });
         return;
@@ -314,7 +320,7 @@ export default class CompanionServer implements IIntegration {
       }
       reply.header("Content-Type", "application/sdp").send(answer);
     });
-    this.fastifyServer.post("/tv/control", (request, reply) => {
+    this.fastifyServer.post("/tv/control", { config: { rateLimit: { max: 300, timeWindow: 1000 * 60 } } }, (request, reply) => {
       if (!this.isTvControlAuthorized(request)) {
         reply.code(401).send({ ok: false, error: "Invalid or missing TV control PIN" });
         return;
