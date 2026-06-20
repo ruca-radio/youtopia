@@ -773,7 +773,10 @@ function getTvDisplayHtml(): string {
 	    const pinGateInput = document.getElementById("pinGateInput");
 	    const pinGateSubmit = document.getElementById("pinGateSubmit");
 	    const pinGateError = document.getElementById("pinGateError");
+	    const body = document.body;
 	    let pendingPinRetry = null;
+	    let hudHideTimer = null;
+	    let commandPending = false;
 	    function getCachedPin() {
 	      return localStorage.getItem(PIN_STORAGE_KEY) || "";
 	    }
@@ -786,11 +789,13 @@ function getTvDisplayHtml(): string {
 	      pinGateError.textContent = "";
 	      pinGateInput.value = "";
 	      pinGate.classList.add("visible");
+	      showHud("pin");
 	      pinGateInput.focus();
 	    }
 	    function hidePinGate() {
 	      pinGate.classList.remove("visible");
 	      pendingPinRetry = null;
+	      scheduleHudHide("pin-complete");
 	    }
 	    async function submitPinGate() {
 	      const pin = pinGateInput.value.trim();
@@ -866,6 +871,30 @@ function getTvDisplayHtml(): string {
 	    let audioStatusTimer = null;
 	    let djGptPeerConnection = null;
 	    let djGptDataChannel = null;
+	    function showHud(reason) {
+	      body.classList.add("hud-visible");
+	      body.classList.remove("hud-idle");
+	      scheduleHudHide(reason || "activity");
+	    }
+	    function scheduleHudHide(reason) {
+	      if (hudHideTimer) clearTimeout(hudHideTimer);
+	      if (
+	        pinGate.classList.contains("visible") ||
+	        commandPending ||
+	        (document.activeElement && document.activeElement.closest && document.activeElement.closest(".control-row"))
+	      ) {
+	        return;
+	      }
+	      const delay = reason === "first-load" ? 6500 : 3600;
+	      hudHideTimer = setTimeout(() => {
+	        hudHideTimer = null;
+	        body.classList.remove("hud-visible");
+	        body.classList.add("hud-idle");
+	      }, delay);
+	    }
+	    function registerTvInputActivity(reason) {
+	      showHud(reason || "input");
+	    }
 	    function statusLightClass(status, okValue) {
 	      if (status === okValue || status === "connected" || status === "applied") return "status-light ok";
 	      if (status === "planning") return "status-light busy";
@@ -1191,6 +1220,8 @@ function getTvDisplayHtml(): string {
 	      }
 	    }
 	    async function sendTvControl(command) {
+	      commandPending = true;
+	      showHud("command");
 	      try {
 	        const response = await fetch("/tv/control", {
 	          method: "POST",
@@ -1205,6 +1236,9 @@ function getTvDisplayHtml(): string {
 	        setAudioStatus("Sent " + command, "ok");
 	      } catch (error) {
 	        setAudioStatus("Control failed: " + command, "bad");
+	      } finally {
+	        commandPending = false;
+	        scheduleHudHide("command-complete");
 	      }
 	    }
 	    async function connectDjGptVoice() {
@@ -1366,13 +1400,19 @@ function getTvDisplayHtml(): string {
 	    document.querySelectorAll("[data-command]").forEach(button => {
 	      button.addEventListener("click", () => sendTvControl(button.dataset.command));
 	    });
+	    ["pointermove", "pointerdown", "touchstart", "keydown", "focusin"].forEach(eventName => {
+	      window.addEventListener(eventName, () => registerTvInputActivity(eventName), { passive: true });
+	    });
+	    window.addEventListener("load", () => showHud("first-load"));
 	    // Bridge for the native Fire TV WebView shell: remote keys route through here so
 	    // they reuse the PIN-aware control path (header + PIN gate) instead of issuing
 	    // unauthenticated POSTs that the PIN-protected endpoint now rejects.
 	    window.youtopiaTvControl = function (command) {
 	      const allowed = ["playPause", "previous", "next", "volumeUp", "volumeDown", "toggleLike"];
+	      registerTvInputActivity("remote");
 	      if (allowed.indexOf(String(command)) !== -1) sendTvControl(String(command));
 	    };
+	    window.registerTvInputActivity = registerTvInputActivity;
 	    audioStatusTimer = setInterval(syncTvAudioStatus, 5000);
 	    syncTvAudioStatus();
 	    function shapeBin(raw) {
