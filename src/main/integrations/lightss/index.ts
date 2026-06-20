@@ -338,6 +338,9 @@ export default class LightssIntegration implements IIntegration {
         this.planCache.set(videoId, plan);
         this.applyPlan(plan, "full", plan.hostLine || plan.rationale);
       })
+      .catch(err => {
+        log.warn("Lightss: full plan failed:", err);
+      })
       .finally(() => {
         this.fullPlanPromise = null;
       });
@@ -359,7 +362,6 @@ export default class LightssIntegration implements IIntegration {
     });
 
     if (!isUpgrade) {
-      this.aiPlanIndex = 0;
       const step = plan.steps[0];
       this.aiPlanIndex = 1;
       void this.postWledState(this.buildWledPayloadFromAiStep(step), `${phase} plan start`, step.reason, step);
