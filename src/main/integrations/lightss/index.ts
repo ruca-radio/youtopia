@@ -759,7 +759,7 @@ export default class LightssIntegration implements IIntegration {
                 role: "user",
                 parts: [
                   { text: `System Instructions:\n${systemPrompt}\n\nSong Context:\n${userPrompt}` },
-                  ...(imageUrl ? [{ url: imageUrl, mimeType: imageUrl.endsWith(".png") ? "image/png" : "image/jpeg" }] : [])
+                  ...(imageUrl ? [{ fileData: { fileUri: imageUrl, mimeType: imageUrl.endsWith(".png") ? "image/png" : "image/jpeg" } }] : [])
                 ]
               }
             ],
