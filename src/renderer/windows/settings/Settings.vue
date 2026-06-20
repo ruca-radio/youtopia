@@ -76,6 +76,7 @@ const companionServerAuthTokens = ref<AuthToken[]>(
   safeStorageAvailable.value ? (JSON.parse(await safeStorage.decryptString(integrations.companionServerAuthTokens)) ?? []) : []
 );
 const companionServerCORSWildcardEnabled = ref<boolean>(integrations.companionServerCORSWildcardEnabled);
+const companionServerTvControlPin = ref<string | null>(integrations.companionServerTvControlPin ?? null);
 const discordPresenceEnabled = ref<boolean>(integrations.discordPresenceEnabled);
 const lastFMEnabled = ref<boolean>(integrations.lastFMEnabled);
 const lightssEnabled = ref<boolean>(integrations.lightssEnabled ?? false);
@@ -136,6 +137,7 @@ store.onDidAnyChange(async newState => {
     ? (JSON.parse(await safeStorage.decryptString(newState.integrations.companionServerAuthTokens)) ?? [])
     : [];
   companionServerCORSWildcardEnabled.value = newState.integrations.companionServerCORSWildcardEnabled;
+  companionServerTvControlPin.value = newState.integrations.companionServerTvControlPin ?? null;
   discordPresenceEnabled.value = newState.integrations.discordPresenceEnabled;
   lastFMEnabled.value = newState.integrations.lastFMEnabled;
   lightssEnabled.value = newState.integrations.lightssEnabled ?? false;
@@ -293,6 +295,14 @@ async function deleteCompanionAuthToken(appId: string) {
 
 function removeCustomCSSPath() {
   store.set("appearance.customCSSPath", null);
+}
+
+function regenerateTvControlPin() {
+  const pin = Math.floor(Math.random() * 1000000)
+    .toString()
+    .padStart(6, "0");
+  companionServerTvControlPin.value = pin;
+  store.set("integrations.companionServerTvControlPin", pin);
 }
 
 function changeTab(newTab: number) {
@@ -511,6 +521,18 @@ window.ytmd.handleUpdateDownloaded(() => {
             description="This setting could be dangerous as it allows any website you visit to communicate with the companion server"
             @change="settingsChanged"
           />
+          <YTMDSetting
+            v-if="companionServerEnabled && safeStorageAvailable"
+            type="custom"
+            indented
+            name="TV control PIN"
+            description="Required on the TV page to send playback commands or start DJ-GPT voice. Enter this PIN once on the TV when prompted."
+          >
+            <div class="tv-control-pin">
+              <span class="pin-value">{{ companionServerTvControlPin ?? "Not generated yet" }}</span>
+              <button @click="regenerateTvControlPin">Regenerate</button>
+            </div>
+          </YTMDSetting>
           <YTMDSetting
             v-if="companionServerEnabled && safeStorageAvailable"
             v-model="companionServerAuthWindowEnabled"
@@ -1104,6 +1126,30 @@ window.ytmd.handleUpdateDownloaded(() => {
 .no-authorized-companions {
   color: #bbbbbb;
   padding: 4px;
+}
+
+.tv-control-pin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tv-control-pin .pin-value {
+  font-family: monospace;
+  font-size: 16px;
+  letter-spacing: 0.15em;
+  background-color: #212121;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.tv-control-pin button {
+  border-radius: 4px;
+  padding: 6px 10px;
+  background-color: #212121;
+  cursor: pointer;
+  border: none;
+  color: inherit;
 }
 
 .discord-failure {

@@ -1,5 +1,5 @@
 import IIntegration from "../integration";
-import Fastify, { FastifyError, FastifyInstance } from "fastify";
+import Fastify, { FastifyError, FastifyInstance, FastifyRequest } from "fastify";
 import FastifyIO from "fastify-socket.io/dist/index";
 import CompanionServerAPIv1 from "./api/v1";
 import { MemoryStoreSchema, StoreSchema } from "~shared/store/schema";
@@ -12,6 +12,7 @@ import { AuthToken } from "~shared/integrations/companion-server/types";
 import { RemoteSocket } from "socket.io";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
 import cors from "@fastify/cors";
+import crypto from "crypto";
 import MemoryStore from "../../memory-store";
 import log from "electron-log";
 import { isDefinedAPIError } from "./api-shared/errors";
@@ -20,6 +21,7 @@ import { createTvAudioStream, createTvProgramStream, getTvAudioStatus } from "./
 
 const DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime-2";
 const DEFAULT_OPENAI_REALTIME_VOICE = "marin";
+const TV_CONTROL_PIN_HEADER = "x-tv-control-pin";
 
 export default class CompanionServer implements IIntegration {
   private listenIp = "0.0.0.0";
@@ -34,6 +36,27 @@ export default class CompanionServer implements IIntegration {
   private getOpenAIApiKey(): string | null {
     const storeKey = (this.store.get("integrations.lightssOpenAIApiKey") as string | null)?.trim();
     return storeKey || process.env.OPENAI_API_KEY?.trim() || null;
+  }
+
+  private getOrCreateTvControlPin(): string {
+    const existing = this.store.get("integrations.companionServerTvControlPin") as string | null;
+    if (existing) return existing;
+
+    const pin = crypto.randomInt(0, 1000000).toString().padStart(6, "0");
+    this.store.set("integrations.companionServerTvControlPin", pin);
+    return pin;
+  }
+
+  private isTvControlAuthorized(request: FastifyRequest): boolean {
+    const provided = request.headers[TV_CONTROL_PIN_HEADER];
+    if (typeof provided !== "string" || provided.length === 0) return false;
+
+    const expected = this.getOrCreateTvControlPin();
+    const providedBuffer = Buffer.from(provided);
+    const expectedBuffer = Buffer.from(expected);
+    if (providedBuffer.length !== expectedBuffer.length) return false;
+
+    return crypto.timingSafeEqual(providedBuffer, expectedBuffer);
   }
 
   private buildDjGptSessionConfig() {
@@ -248,6 +271,11 @@ export default class CompanionServer implements IIntegration {
       program.process.stdout.pipe(reply.raw);
     });
     this.fastifyServer.post("/tv/dj-gpt/session", async (request, reply) => {
+      if (!this.isTvControlAuthorized(request)) {
+        reply.code(401).send({ error: "Invalid or missing TV control PIN" });
+        return;
+      }
+
       const apiKey = this.getOpenAIApiKey();
       if (!apiKey) {
         reply.code(503).send({
@@ -283,6 +311,11 @@ export default class CompanionServer implements IIntegration {
       reply.header("Content-Type", "application/sdp").send(answer);
     });
     this.fastifyServer.post("/tv/control", (request, reply) => {
+      if (!this.isTvControlAuthorized(request)) {
+        reply.code(401).send({ ok: false, error: "Invalid or missing TV control PIN" });
+        return;
+      }
+
       const allowedTvCommands = new Set(["playPause", "previous", "next", "volumeUp", "volumeDown", "toggleLike"]);
       const command = String((request.body as { command?: string } | null)?.command ?? "");
       if (!allowedTvCommands.has(command)) {
@@ -389,14 +422,19 @@ function getTvReceiverHtml(): string {
     video { width: 100vw; height: 100vh; display: block; object-fit: cover; background: #000; }
     .overlay { position: fixed; inset: auto 22px 22px 22px; display: flex; align-items: center; justify-content: space-between; gap: 14px; pointer-events: none; }
     .status { min-width: 0; color: rgba(255,255,255,.72); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 14px #000; }
-    button { pointer-events: auto; appearance: none; border: 1px solid rgba(255,255,255,.24); background: rgba(255,255,255,.1); color: #fff; border-radius: 999px; min-width: 42px; height: 42px; padding: 0 16px; font: inherit; }
+    button { pointer-events: auto; appearance: none; display: inline-grid; place-items: center; border: 1px solid rgba(255,255,255,.24); background: rgba(255,255,255,.1); color: #fff; border-radius: 999px; width: 42px; height: 42px; padding: 0; font: inherit; line-height: 0; }
+    button svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   </style>
 </head>
 <body>
   <video id="program" autoplay playsinline controls src="/tv/program"></video>
   <div class="overlay">
     <div id="status" class="status">Server program feed</div>
-    <button id="reload" type="button" aria-label="Reload program">Reload</button>
+    <button id="reload" type="button" aria-label="Reload program" title="Reload program">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"/><path d="M3 12A9 9 0 0 1 18.3 5.6"/><path d="M18 2v4h-4"/><path d="M6 22v-4h4"/></svg>
+      <span class="sr-only">Reload program</span>
+    </button>
   </div>
   <script>
     const program = document.getElementById("program");
@@ -507,6 +545,14 @@ function getTvDisplayHtml(): string {
     .icon-button.primary { color: #050505; background: #f5f5f5; border-color: #f5f5f5; }
     .icon-button.wide { width: 52px; }
     .icon-button:disabled { opacity: .46; }
+    .pin-gate { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: rgba(0,0,0,.78); backdrop-filter: blur(6px); }
+    .pin-gate.visible { display: grid; }
+    .pin-gate-card { width: min(360px, 86vw); padding: 28px; border-radius: 16px; background: #121212; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 30px 90px rgba(0,0,0,.6); text-align: center; }
+    .pin-gate-card h2 { margin: 0 0 8px; font-size: 20px; }
+    .pin-gate-card p { margin: 0 0 16px; color: #aaa; font-size: 14px; }
+    .pin-gate-card input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 22px; letter-spacing: .3em; text-align: center; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: #050505; color: #f5f5f5; }
+    .pin-gate-card button { margin-top: 14px; width: 100%; padding: 12px; border-radius: 10px; border: none; background: #f5f5f5; color: #050505; font: inherit; font-weight: 700; cursor: pointer; }
+    .pin-gate-error { margin-top: 10px; color: #f87171; font-size: 13px; min-height: 16px; }
     .audio-status { min-width: 0; color: #aaa; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .transport-panel { justify-content: center; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
@@ -565,6 +611,15 @@ function getTvDisplayHtml(): string {
   </style>
 </head>
 <body data-vu-style="bars" data-album-art-mode="corner">
+	  <div id="pinGate" class="pin-gate">
+	    <div class="pin-gate-card">
+	      <h2>Enter TV control PIN</h2>
+	      <p>Find this PIN in Youtopia under Settings &rsaquo; Integrations &rsaquo; Companion server.</p>
+	      <input id="pinGateInput" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="000000" />
+	      <button id="pinGateSubmit" type="button">Unlock</button>
+	      <div id="pinGateError" class="pin-gate-error"></div>
+	    </div>
+	  </div>
 	  <div id="albumArtBackdrop" class="album-art-backdrop" aria-hidden="true"></div>
 	  <canvas id="scene" aria-hidden="true"></canvas>
 	  <img id="albumArt" class="album-art" alt="" hidden />
@@ -650,6 +705,45 @@ function getTvDisplayHtml(): string {
     </section>
 	  </main>
 	  <script>
+	    const PIN_STORAGE_KEY = "youtopiaTvControlPin";
+	    const pinGate = document.getElementById("pinGate");
+	    const pinGateInput = document.getElementById("pinGateInput");
+	    const pinGateSubmit = document.getElementById("pinGateSubmit");
+	    const pinGateError = document.getElementById("pinGateError");
+	    let pendingPinRetry = null;
+	    function getCachedPin() {
+	      return localStorage.getItem(PIN_STORAGE_KEY) || "";
+	    }
+	    function controlHeaders() {
+	      const pin = getCachedPin();
+	      return pin ? { "X-Tv-Control-Pin": pin } : {};
+	    }
+	    function showPinGate(retry) {
+	      pendingPinRetry = retry || null;
+	      pinGateError.textContent = "";
+	      pinGateInput.value = "";
+	      pinGate.classList.add("visible");
+	      pinGateInput.focus();
+	    }
+	    function hidePinGate() {
+	      pinGate.classList.remove("visible");
+	      pendingPinRetry = null;
+	    }
+	    async function submitPinGate() {
+	      const pin = pinGateInput.value.trim();
+	      if (!pin) {
+	        pinGateError.textContent = "Enter the PIN shown in Youtopia settings.";
+	        return;
+	      }
+	      localStorage.setItem(PIN_STORAGE_KEY, pin);
+	      const retry = pendingPinRetry;
+	      hidePinGate();
+	      if (retry) await retry();
+	    }
+	    pinGateSubmit.addEventListener("click", submitPinGate);
+	    pinGateInput.addEventListener("keydown", event => {
+	      if (event.key === "Enter") submitPinGate();
+	    });
 	    const canvas = document.getElementById("scene");
 	    const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
 	    let canvasW = 0;
@@ -992,9 +1086,13 @@ function getTvDisplayHtml(): string {
 	      try {
 	        const response = await fetch("/tv/control", {
 	          method: "POST",
-	          headers: { "Content-Type": "application/json" },
+	          headers: Object.assign({ "Content-Type": "application/json" }, controlHeaders()),
 	          body: JSON.stringify({ command })
 	        });
+	        if (response.status === 401) {
+	          showPinGate(() => sendTvControl(command));
+	          return;
+	        }
 	        if (!response.ok) throw new Error("control failed");
 	        setAudioStatus("Sent " + command, "ok");
 	      } catch (error) {
@@ -1050,9 +1148,19 @@ function getTvDisplayHtml(): string {
 	        await pc.setLocalDescription(offer);
 	        const response = await fetch("/tv/dj-gpt/session", {
 	          method: "POST",
-	          headers: { "Content-Type": "application/sdp" },
+	          headers: Object.assign({ "Content-Type": "application/sdp" }, controlHeaders()),
 	          body: offer.sdp || ""
 	        });
+	        if (response.status === 401) {
+	          pc.close();
+	          if (djGptPeerConnection === pc) {
+	            djGptPeerConnection = null;
+	            djGptDataChannel = null;
+	          }
+	          setButtonLabel(djGptConnect, "Start DJ-GPT voice");
+	          showPinGate(() => connectDjGptVoice());
+	          return;
+	        }
 	        if (!response.ok) throw new Error(await response.text());
 	        const answer = { type: "answer", sdp: await response.text() };
 	        await pc.setRemoteDescription(answer);

@@ -520,6 +520,8 @@ function handleMainWindowClose(event: Electron.Event) {
 
   if (closeAction === CloseAction.Tray || store.get("general").hideToTrayOnClose || isDarwin) {
     event.preventDefault();
+    store.set("state.windowBounds", mainWindow.getNormalBounds());
+    store.set("state.windowMaximized", mainWindow.isMaximized());
     mainWindow.hide();
     return;
   }
@@ -583,6 +585,7 @@ const store = new Conf<StoreSchema>({
       companionServerEnabled: false,
       companionServerAuthTokens: null,
       companionServerCORSWildcardEnabled: false,
+      companionServerTvControlPin: null,
       discordPresenceEnabled: false,
       lastFMEnabled: false,
       lightssEnabled: false,

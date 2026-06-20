@@ -211,7 +211,7 @@ function getTvAudioFfmpegArgs(source: string, format: TvAudioFormat): string[] {
 }
 
 function escapeDrawText(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/\[/g, "\\[").replace(/\]/g, "\\]").slice(0, 96);
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "%%").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/\[/g, "\\[").replace(/\]/g, "\\]").slice(0, 96);
 }
 
 function resolvePulseMonitorSource(): string {
