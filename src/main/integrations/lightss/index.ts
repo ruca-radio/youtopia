@@ -748,7 +748,7 @@ export default class LightssIntegration implements IIntegration {
     };
   }
 
-  private async buildOpenRouterLightshowContext(state: PlayerState): Promise<JsonValue> {
+  private async buildOpenRouterLightshowContext(state: PlayerState) {
     const context = await this.buildAiLightshowContext(state);
 
     return {
@@ -1093,27 +1093,43 @@ export default class LightssIntegration implements IIntegration {
   }
 
   private getOpenAIModel(): string {
-    return (this.store.get("integrations.lightssOpenAIModel") || DEFAULT_OPENAI_MODEL).trim() || DEFAULT_OPENAI_MODEL;
+    return (
+      (this.store.get<"integrations.lightssOpenAIModel", string>("integrations.lightssOpenAIModel") || DEFAULT_OPENAI_MODEL).trim() || DEFAULT_OPENAI_MODEL
+    );
   }
 
   private getOpenAIRealtimeModel(): string {
-    return (this.store.get("integrations.lightssOpenAIRealtimeModel") || DEFAULT_OPENAI_REALTIME_MODEL).trim() || DEFAULT_OPENAI_REALTIME_MODEL;
+    return (
+      (this.store.get<"integrations.lightssOpenAIRealtimeModel", string>("integrations.lightssOpenAIRealtimeModel") || DEFAULT_OPENAI_REALTIME_MODEL).trim() ||
+      DEFAULT_OPENAI_REALTIME_MODEL
+    );
   }
 
   private getOpenAIRealtimeVoice(): string {
-    return (this.store.get("integrations.lightssOpenAIRealtimeVoice") || DEFAULT_OPENAI_REALTIME_VOICE).trim() || DEFAULT_OPENAI_REALTIME_VOICE;
+    return (
+      (this.store.get<"integrations.lightssOpenAIRealtimeVoice", string>("integrations.lightssOpenAIRealtimeVoice") || DEFAULT_OPENAI_REALTIME_VOICE).trim() ||
+      DEFAULT_OPENAI_REALTIME_VOICE
+    );
   }
 
   private getOpenRouterModel(): string {
-    return (this.store.get("integrations.lightssOpenRouterModel") || DEFAULT_OPENROUTER_MODEL).trim() || DEFAULT_OPENROUTER_MODEL;
+    return (
+      (this.store.get<"integrations.lightssOpenRouterModel", string>("integrations.lightssOpenRouterModel") || DEFAULT_OPENROUTER_MODEL).trim() ||
+      DEFAULT_OPENROUTER_MODEL
+    );
   }
 
   private getOllamaModel(): string {
-    return (this.store.get("integrations.lightssOllamaModel") || DEFAULT_OLLAMA_MODEL).trim() || DEFAULT_OLLAMA_MODEL;
+    return (
+      (this.store.get<"integrations.lightssOllamaModel", string>("integrations.lightssOllamaModel") || DEFAULT_OLLAMA_MODEL).trim() || DEFAULT_OLLAMA_MODEL
+    );
   }
 
   private getOllamaBaseUrl(): string {
-    const baseUrl = (this.store.get("integrations.lightssOllamaBaseUrl") || DEFAULT_OLLAMA_BASE_URL).trim().replace(/\/+$/, "") || DEFAULT_OLLAMA_BASE_URL;
+    const baseUrl =
+      (this.store.get<"integrations.lightssOllamaBaseUrl", string>("integrations.lightssOllamaBaseUrl") || DEFAULT_OLLAMA_BASE_URL)
+        .trim()
+        .replace(/\/+$/, "") || DEFAULT_OLLAMA_BASE_URL;
     if (baseUrl.startsWith("http://") || baseUrl.startsWith("https://")) {
       return baseUrl;
     }
