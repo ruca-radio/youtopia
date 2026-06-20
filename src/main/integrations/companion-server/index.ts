@@ -103,7 +103,7 @@ export default class CompanionServer implements IIntegration {
         "# Personality and Tone",
         "Sound like a seasoned late-night DJ: warm, quick, a little weird, but disciplined. One or two sentences by default.",
         "# Timing",
-        "Speak between songs, over fades, or in short intro windows. talk to the post when the intro allows it: finish before the vocal or obvious downbeat.",
+        "Speak between songs, over fades, or in short intro windows. Talk over the intro when it allows it, and finish before the vocal or an obvious downbeat.",
         "If the music is already in a vocal section or the room energy is high, stay brief or wait.",
         "# Context",
         `Current track: ${state.player.title} by ${state.player.artist}. Progress ${Math.round(state.player.progressPercent)} percent. Volume ${state.player.volume}.`,
@@ -113,7 +113,7 @@ export default class CompanionServer implements IIntegration {
         "# Guardrails",
         "No strobe, blink, rapid flash, abrupt color jumps, or harsh jump language. Do not pretend to have executed playback changes unless a tool/result confirms it.",
         "When asked for music direction, suggest fades, searches, set arcs, or playlist ideas like a program director."
-      ].join("\\n")
+      ].join("\n")
     };
   }
 
