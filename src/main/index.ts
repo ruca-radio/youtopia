@@ -625,7 +625,7 @@ const store = new Conf<StoreSchema>({
       lightssSketchProvider: LightssAiProvider.Gemini,
       lightssSketchModel: "gemini-2.5-flash",
       lightssVisionEnabled: true,
-      lightssStepIntervalMs: 1000,
+      lightssStepIntervalMs: 7000,
       lightssBridgePath: null,
       lightssPythonPath: null,
       lightssWledPrompt:
