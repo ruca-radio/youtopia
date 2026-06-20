@@ -795,6 +795,18 @@ const store = new Conf<StoreSchema>({
           "You are the Music Analyst and Visual Coordinator Agent.\nYour role is to analyze the song title, artist, and musical metadata to establish a cohesive visual direction.\nDetermine the exact genre, emotional mood, and a rich, creative visual concept that will guide the lighting and screen visualizer.\nKeep themes elegant, premium, and true to the track's emotional core.\nReturn JSON matching the schema precisely."
         );
       }
+      if (!store.has("integrations.lightssSketchProvider")) {
+        store.set("integrations.lightssSketchProvider", LightssAiProvider.Gemini);
+      }
+      if (!store.has("integrations.lightssSketchModel")) {
+        store.set("integrations.lightssSketchModel", "gemini-2.5-flash");
+      }
+      if (!store.has("integrations.lightssVisionEnabled")) {
+        store.set("integrations.lightssVisionEnabled", true);
+      }
+      if (!store.has("integrations.lightssStepIntervalMs")) {
+        store.set("integrations.lightssStepIntervalMs", 7000);
+      }
       if (!store.has("integrations.lightssBridgePath")) {
         store.set("integrations.lightssBridgePath", null);
       }
