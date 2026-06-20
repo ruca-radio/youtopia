@@ -51,7 +51,7 @@ type WledPayload = {
   seg?: WledSegmentPayload[];
 };
 
-interface GeminiResponse {
+type GeminiResponse = {
   candidates?: {
     content?: {
       parts?: {
@@ -59,7 +59,7 @@ interface GeminiResponse {
       }[];
     };
   }[];
-}
+};
 
 type AiLightshowStep = {
   reason: string;
@@ -192,7 +192,6 @@ export default class LightssIntegration implements IIntegration {
   private planCache = new Map<string, AiLightshowPlan>();
   private sketchPlanCache = new Map<string, AiLightshowPlan>();
   private planPhase: "sketch" | "full" | null = null;
-  private currentPlanVideoId: string | null = null;
   private sketchPlanPromise: Promise<void> | null = null;
   private fullPlanPromise: Promise<void> | null = null;
   private aiPlanRefreshedAt50 = false;
@@ -1153,6 +1152,7 @@ export default class LightssIntegration implements IIntegration {
     } else if (provider === LightssAiProvider.Gemini) {
       model = ((this.store.get("integrations.lightssSketchModel") as string) || "gemini-2.5-flash").trim();
     } else {
+      // lightssSketchModel is shared for both Gemini and Ollama sketch calls
       model = ((this.store.get("integrations.lightssSketchModel") as string) || DEFAULT_OLLAMA_MODEL).trim();
     }
     return { provider, model };
