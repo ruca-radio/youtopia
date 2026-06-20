@@ -18,12 +18,13 @@ import MemoryStore from "../../memory-store";
 import log from "electron-log";
 import { isDefinedAPIError } from "./api-shared/errors";
 import { getLatestTvAudioProfile, getTvDisplayState } from "../../tv-display-state";
-import { createTvAudioStream, createTvProgramStream, getTvAudioStatus } from "./tv-audio-stream";
+import { createTvAudioStream, createTvProgramStream, ensureTvProgramHlsStream, getTvAudioStatus, getTvProgramHlsFilePath } from "./tv-audio-stream";
 import { addAudioAnalyzerSubscriber, removeAudioAnalyzerSubscriber } from "../../audio-analyzer-hub";
 
 const DEFAULT_OPENAI_REALTIME_MODEL = "gpt-realtime-2";
 const DEFAULT_OPENAI_REALTIME_VOICE = "marin";
 const TV_CONTROL_PIN_HEADER = "x-tv-control-pin";
+const TRUSTED_TV_CONTROL_CLIENTS = new Set(["10.27.27.207", "::ffff:10.27.27.207", "127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 
 export default class CompanionServer implements IIntegration {
   private listenIp = "0.0.0.0";
@@ -66,6 +67,8 @@ export default class CompanionServer implements IIntegration {
   }
 
   private isTvControlAuthorized(request: FastifyRequest): boolean {
+    if (TRUSTED_TV_CONTROL_CLIENTS.has(request.ip)) return true;
+
     const provided = request.headers[TV_CONTROL_PIN_HEADER];
     if (typeof provided !== "string" || provided.length === 0) return false;
 
@@ -308,6 +311,45 @@ export default class CompanionServer implements IIntegration {
       });
       program.process.stdout.pipe(reply.raw);
     });
+    this.fastifyServer.get("/tv/program.m3u8", async (_request, reply) => {
+      const status = getTvAudioStatus();
+      if (!status.ffmpegAvailable) {
+        reply.code(503).send({
+          error: "ffmpeg is not available",
+          status
+        });
+        return;
+      }
+
+      const state = getTvDisplayState();
+      const program = ensureTvProgramHlsStream({
+        title: state.player.title,
+        artist: state.player.artist
+      });
+      await waitForFile(program.playlistPath, 2500);
+      const playlist = readReadyPlaylist(program.playlistPath);
+      if (!playlist) {
+        reply.code(503).send("TV program playlist is warming up");
+        return;
+      }
+
+      log.info(`TV server HLS program stream ready from ${program.source}`);
+      reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
+      reply.header("Access-Control-Allow-Origin", "*");
+      reply.type("application/vnd.apple.mpegurl").send(playlist);
+    });
+    this.fastifyServer.get("/tv/program-hls/:file", (request, reply) => {
+      const file = String((request.params as { file?: string }).file ?? "");
+      const filePath = getTvProgramHlsFilePath(file);
+      if (!filePath || !fs.existsSync(filePath)) {
+        reply.code(404).send();
+        return;
+      }
+
+      reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
+      reply.header("Access-Control-Allow-Origin", "*");
+      reply.type("video/mp2t").send(fs.createReadStream(filePath));
+    });
     this.fastifyServer.post("/tv/dj-gpt/session", { config: { rateLimit: { max: 10, timeWindow: 1000 * 60 } } }, async (request, reply) => {
       if (!this.isTvControlAuthorized(request)) {
         reply.code(401).send({ error: "Invalid or missing TV control PIN" });
@@ -473,7 +515,7 @@ function getTvReceiverHtml(): string {
   </style>
 </head>
 <body>
-  <video id="program" autoplay playsinline src="/tv/program"></video>
+  <video id="program" autoplay playsinline src="/tv/program.m3u8"></video>
   <div class="controls">
     <button data-command="previous" type="button" aria-label="Previous track" title="Previous track">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14"/><path d="M19 6l-10 6 10 6V6z"/></svg>
@@ -514,7 +556,7 @@ function getTvReceiverHtml(): string {
       restartTimer = setTimeout(() => {
         restartTimer = null;
         const muted = program.muted;
-        program.src = "/tv/program?ts=" + Date.now();
+        program.src = "/tv/program.m3u8?ts=" + Date.now();
         program.muted = muted;
         program.play().catch(() => setStatus("Waiting for server program feed"));
       }, reason === "error" ? 350 : 900);
@@ -545,15 +587,12 @@ function getTvReceiverHtml(): string {
     }
     function startProgram() {
       const muted = program.muted;
-      program.src = "/tv/program?ts=" + Date.now();
+      program.src = "/tv/program.m3u8?ts=" + Date.now();
       program.muted = muted;
       program.play().catch(() => setStatus("Waiting for server program feed"));
     }
     program.addEventListener("playing", () => setStatus("Server output live: audio and video in one feed"));
-    program.addEventListener("waiting", () => {
-      setStatus("Resyncing server program feed");
-      restartProgramStream("waiting");
-    });
+    program.addEventListener("waiting", () => setStatus("Buffering server program feed"));
     program.addEventListener("error", () => {
       setStatus("Restarting server program feed");
       restartProgramStream("error");
@@ -571,6 +610,21 @@ function getTvReceiverHtml(): string {
   </script>
 </body>
 </html>`;
+}
+
+async function waitForFile(filePath: string, timeoutMs: number): Promise<void> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (readReadyPlaylist(filePath)) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
+function readReadyPlaylist(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) return null;
+  const content = fs.readFileSync(filePath, "utf8");
+  if (!content.includes("#EXTINF") || !content.includes("/tv/program-hls/")) return null;
+  return content;
 }
 
 function getTvDisplayHtml(): string {
@@ -599,9 +653,11 @@ function getTvDisplayHtml(): string {
 	      transform: translateY(12px);
 	      pointer-events: none;
 	    }
-	    body.hud-idle .message,
-	    body.hud-idle .ticker {
+	    body.hud-idle .message {
 	      opacity: .18;
+	    }
+	    body.hud-idle .ticker {
+	      opacity: 1; /* Keep bottom scroll fully bright and crisp */
 	    }
 	    body[data-font="display"] { font-family: Impact, Haettenschweiler, "Arial Narrow Bold", Inter, sans-serif; }
 	    body[data-font="mono"] { font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace; }
@@ -652,7 +708,7 @@ function getTvDisplayHtml(): string {
     .status-light.bad { background: #ef4444; border-color: rgba(254,202,202,.82); box-shadow: 0 0 0 5px rgba(239,68,68,.13), 0 0 22px rgba(239,68,68,.42); }
     .visualizer { min-height: 0; display: flex; align-items: end; justify-content: center; gap: clamp(8px, 1vw, 18px); }
     .bar { width: clamp(12px, 2vw, 34px); min-height: 8px; border-radius: 10px 10px 4px 4px; background: linear-gradient(to top, var(--vu-low), var(--vu-mid) 62%, var(--vu-high)); opacity: .95; will-change: height; }
-    .bar.fallback { opacity: .28; background: #5a5a5a; }
+    .bar.fallback { opacity: .62; background: linear-gradient(to top, #334155, #475569 62%, #64748b); }
     body[data-vu-style="classicLed"] .bar { height: 82% !important; background: linear-gradient(to top, var(--vu-low) 0%, var(--vu-low) 55%, var(--vu-mid) 55%, var(--vu-mid) 78%, var(--vu-high) 78%); box-shadow: inset 0 0 0 2px rgba(0,0,0,.35); }
     body[data-vu-style="dotMatrix"] .bar { border-radius: 999px; background: radial-gradient(circle at 50% 86%, var(--vu-high) 0 35%, transparent 38%) 0 0 / 100% 12.5% repeat-y; }
     body[data-vu-style="spectrumLine"] .visualizer { align-items: center; gap: 3px; }
@@ -877,11 +933,25 @@ function getTvDisplayHtml(): string {
 	    let canvasW = 0;
 	    let canvasH = 0;
 	    let dpr = 1;
+	    // Lite mode: forced via /tv?lite=1 (Fire TV / weak hardware) or auto-enabled
+	    // when sustained frame drops are detected. Caps resolution, FPS, and per-frame
+	    // gradient work so weak GPUs (Fire TV) stay smooth.
+	    const liteParam = window.location.search.indexOf("lite=1") !== -1;
+	    let liteMode = liteParam;
+	    // Cap the canvas backing store so fill cost scales with pixels, not screen size.
+	    // Lite tops out near 720p; full tops out near 1080p. dpr is intentionally capped at 1
+	    // in lite mode (Fire TV reports dpr 1 anyway, but this protects 4K panels).
+	    function targetMaxDim() { return liteMode ? 1280 : 1920; }
 	    function resizeCanvas() {
-	      const nextDpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+	      const baseDpr = liteMode ? 1 : Math.max(1, Math.min(1.5, window.devicePixelRatio || 1));
 	      const rect = canvas.getBoundingClientRect();
-	      const nextW = Math.max(1, Math.floor(rect.width * nextDpr));
-	      const nextH = Math.max(1, Math.floor(rect.height * nextDpr));
+	      const cssW = Math.max(1, rect.width);
+	      const cssH = Math.max(1, rect.height);
+	      // Scale down so the larger backing dimension never exceeds targetMaxDim.
+	      const fitScale = Math.min(1, targetMaxDim() / Math.max(cssW * baseDpr, cssH * baseDpr));
+	      const nextDpr = baseDpr * fitScale;
+	      const nextW = Math.max(1, Math.floor(cssW * nextDpr));
+	      const nextH = Math.max(1, Math.floor(cssH * nextDpr));
 	      dpr = nextDpr;
 	      if (canvasW === nextW && canvasH === nextH) return;
 	      canvasW = nextW;
@@ -916,6 +986,11 @@ function getTvDisplayHtml(): string {
 	    let lastFrameAt = Date.now();
 	    let sceneEnergy = 0;
 	    let scene = null;
+	    // Frame pacing: cap ambient scene to ~30fps (no benefit above that for slow
+	    // background motion) and watch for sustained slowness to auto-drop into lite mode.
+	    const FRAME_INTERVAL_MS = 1000 / 30;
+	    let lastPaintAt = 0;
+	    let slowFrames = 0;
 	    const tvAudio = document.getElementById("tvAudio");
 	    const djGptAudio = document.getElementById("djGptAudio");
 	    const audioConnect = document.getElementById("audioConnect");
@@ -1121,7 +1196,11 @@ function getTvDisplayHtml(): string {
 	    }
 	    function initScene(config) {
 	      const rand = mulberry32(config.seed);
-	      const particleCount = Math.round(lerp(28, 120, config.density / 100));
+	      // Lite mode caps particle count hard (Fire TV chokes on per-particle radial
+	      // gradients). Full mode scales 28..120 by density.
+	      const maxParticles = liteMode ? 26 : 120;
+	      const minParticles = liteMode ? 10 : 28;
+	      const particleCount = Math.round(lerp(minParticles, maxParticles, config.density / 100));
 	      const particles = Array.from({ length: particleCount }, () => {
 	        const r = lerp(8, 90, Math.pow(rand(), 2.4));
 	        return {
@@ -1133,7 +1212,7 @@ function getTvDisplayHtml(): string {
 	          a: lerp(0.05, 0.16, rand())
 	        };
 	      });
-	      const ribbons = Array.from({ length: 4 }, (_v, i) => ({
+	      const ribbons = Array.from({ length: liteMode ? 2 : 4 }, (_v, i) => ({
 	        phase: rand() * Math.PI * 2,
 	        band: i,
 	        width: lerp(0.12, 0.26, rand())
@@ -1477,7 +1556,14 @@ function getTvDisplayHtml(): string {
 	    ["pointermove", "pointerdown", "touchstart", "keydown", "focusin"].forEach(eventName => {
 	      window.addEventListener(eventName, () => registerTvInputActivity(eventName), { passive: true });
 	    });
-	    window.addEventListener("load", () => showHud("first-load"));
+	    window.addEventListener("load", () => {
+      showHud("first-load");
+      // Fire TV has no mouse — auto-connect audio after the server settles.
+      // The WebView already allows media without a gesture (setMediaPlaybackRequiresUserGesture(false)).
+      setTimeout(() => {
+        if (!audioConnected) connectTvAudio();
+      }, 1200);
+    });
 	    // Bridge for the native Fire TV WebView shell: remote keys route through here so
 	    // they reuse the PIN-aware control path (header + PIN gate) instead of issuing
 	    // unauthenticated POSTs that the PIN-protected endpoint now rejects.
@@ -1510,8 +1596,17 @@ function getTvDisplayHtml(): string {
 	        bar.classList.toggle("fallback", !live);
 	      });
 	      // Immersive canvas background: deterministic scene seeded from state.lightss.visualScene (if present).
-	      if (ctx && canvasW && canvasH) {
-	        const now = Date.now();
+	      // Fire TV / weak hardware: Amazon WebView renders Canvas 2D in software (Skia CPU rasterization).
+	      // Every createRadialGradient / createLinearGradient call is CPU-bound and chokes the frame rate.
+	      // In lite mode, skip the canvas scene entirely — DOM elements (VU bars, text, album art) are
+	      // GPU-composited and run smooth. The canvas stays as a pure black backdrop.
+	      if (!liteMode) {
+	      const nowMs = Date.now();
+	      const paintDue = nowMs - lastPaintAt >= FRAME_INTERVAL_MS;
+	      if (ctx && canvasW && canvasH && paintDue) {
+	        const frameStart = nowMs;
+	        lastPaintAt = nowMs;
+	        const now = nowMs;
 	        const dt = Math.max(0.001, Math.min(0.05, (now - lastFrameAt) / 1000));
 	        lastFrameAt = now;
 	        const lightss = state && state.lightss ? state.lightss : null;
@@ -1646,6 +1741,14 @@ function getTvDisplayHtml(): string {
 	          const px = p.x * canvasW;
 	          const py = p.y * canvasH;
 	          const pr = p.r * dpr * lerp(0.85, 1.15, sceneEnergy);
+	          if (liteMode) {
+	            // Cheap flat dot: no per-particle gradient allocation (the Fire TV killer).
+	            ctx.fillStyle = "rgba(255,255,255," + (p.a * tint) + ")";
+	            ctx.beginPath();
+	            ctx.arc(px, py, Math.max(1, pr * 0.55), 0, Math.PI * 2);
+	            ctx.fill();
+	            continue;
+	          }
 	          const pg = ctx.createRadialGradient(px, py, 0, px, py, pr);
 	          pg.addColorStop(0, "rgba(255,255,255," + (p.a * tint) + ")");
 	          pg.addColorStop(0.55, "rgba(255,255,255," + (p.a * tint * 0.35) + ")");
@@ -1670,14 +1773,28 @@ function getTvDisplayHtml(): string {
 	          ctx.stroke();
 	        }
 
-	        ctx.globalCompositeOperation = "screen";
-	        ctx.fillStyle = cfg.accent;
-	        ctx.globalAlpha = accentAlpha;
-	        ctx.fillRect(0, 0, canvasW, canvasH);
+		ctx.globalCompositeOperation = "screen";
+		ctx.fillStyle = cfg.accent;
+		ctx.globalAlpha = accentAlpha;
+		ctx.fillRect(0, 0, canvasW, canvasH);
 
-	        ctx.restore();
+		ctx.restore();
+
+		// Auto-degrade: if painting consistently takes too long, drop into lite mode
+		// once and rebuild the scene lighter. Skip if already lite.
+		if (!liteMode) {
+		  const cost = Date.now() - frameStart;
+		  if (cost > 22) slowFrames++; else if (slowFrames > 0) slowFrames--;
+		  if (slowFrames >= 90) {
+		    liteMode = true;
+		    slowFrames = 0;
+		    resizeCanvas();
+		    if (scene) scene = initScene(scene.config);
+		  }
+		}
 	      }
-	      requestAnimationFrame(render);
+      }
+      requestAnimationFrame(render);
 	    }
     function connectEvents() {
       if (!window.EventSource) {

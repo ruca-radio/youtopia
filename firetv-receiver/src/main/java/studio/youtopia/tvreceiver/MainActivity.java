@@ -17,7 +17,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 public final class MainActivity extends Activity {
-    private static final String TV_URL = "http://10.27.27.96:9863/tv/program-receiver";
+    private static final String TV_URL = "http://10.27.27.96:9863/tv?lite=1";
     // Remote keys reach the PIN-protected /tv/control endpoint via the page's JS bridge
     // (window.youtopiaTvControl), so the native shell no longer POSTs to it directly.
     private static final long RECONNECT_DELAY_MS = 4000L;
@@ -39,7 +39,7 @@ public final class MainActivity extends Activity {
         webView.setKeepScreenOn(true);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        // Hardware layer keeps the server-rendered program video smooth on Fire TV GPUs.
+        // Hardware layer keeps the canvas VU/visualizer loop smooth on Fire TV GPUs.
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         WebSettings settings = webView.getSettings();
@@ -163,11 +163,13 @@ public final class MainActivity extends Activity {
                 return true;
             case KeyEvent.KEYCODE_MEDIA_NEXT:
             case KeyEvent.KEYCODE_CHANNEL_UP:
-            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
                 sendControl("next");
                 return true;
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                sendControl("volumeUp");
+                return true;
             case KeyEvent.KEYCODE_MEDIA_REWIND:
-                sendControl("previous");
+                sendControl("volumeDown");
                 return true;
             case KeyEvent.KEYCODE_MENU:
                 reloadTv();
