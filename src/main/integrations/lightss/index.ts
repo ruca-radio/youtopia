@@ -701,22 +701,26 @@ export default class LightssIntegration implements IIntegration {
       } else if (provider.provider === LightssAiProvider.OpenRouter) {
         const apiKey = this.getOpenRouterApiKey();
         if (!apiKey) throw new Error("OpenRouter API key missing");
+        type ORouterMessage =
+          | { role: string; content: string }
+          | { role: string; content: Array<{ type: string; text?: string; image_url?: { url: string } }> };
+
+        const orUserMessage: ORouterMessage = imageUrl
+          ? {
+              role: "user",
+              content: [
+                { type: "text", text: userPrompt },
+                { type: "image_url", image_url: { url: imageUrl } }
+              ]
+            }
+          : { role: "user", content: userPrompt };
+        const orMessages: ORouterMessage[] = [{ role: "system", content: systemPrompt }, orUserMessage];
+
         response = await this.postJson<JsonValue>(
           new URL(OPENROUTER_CHAT_COMPLETIONS_URL),
           {
             model: provider.model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              {
-                role: "user",
-                content: imageUrl
-                  ? [
-                      { type: "text", text: userPrompt },
-                      { type: "image_url", image_url: { url: imageUrl } }
-                    ]
-                  : userPrompt
-              }
-            ] as unknown as { role: string; content: string }[],
+            messages: orMessages as unknown as JsonValue[],
             response_format: {
               type: "json_schema",
               json_schema: {
@@ -755,7 +759,7 @@ export default class LightssIntegration implements IIntegration {
                 role: "user",
                 parts: [
                   { text: `System Instructions:\n${systemPrompt}\n\nSong Context:\n${userPrompt}` },
-                  ...(imageUrl ? [{ fileUri: imageUrl, mimeType: "image/jpeg" as const }] : [])
+                  ...(imageUrl ? [{ url: imageUrl, mimeType: imageUrl.endsWith(".png") ? "image/png" : "image/jpeg" }] : [])
                 ]
               }
             ],
@@ -790,7 +794,7 @@ export default class LightssIntegration implements IIntegration {
               },
               {
                 role: "user",
-                content: [{ type: "input_text", text: userPrompt }, ...(imageUrl ? [{ type: "input_image", image_url: imageUrl }] : [])]
+                content: [{ type: "input_text", text: userPrompt }, ...(imageUrl ? [{ type: "input_image", image_url: { url: imageUrl } }] : [])]
               }
             ],
             text: {
