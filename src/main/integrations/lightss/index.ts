@@ -23,7 +23,7 @@ const WLED_TIMEOUT_MS = 2500;
 const OPENAI_TIMEOUT_MS = 20000;
 const OLLAMA_TIMEOUT_MS = 45000;
 const GEMINI_TIMEOUT_MS = 25000;
-const SKETCH_TIMEOUT_MS = 8000;
+const SKETCH_TIMEOUT_MS = 15000;
 const AUDIO_PROFILE_WAIT_MS = 1400;
 const AUDIO_PROFILE_POLL_MS = 120;
 const VISION_CAPABLE_PROVIDERS: LightssAiProvider[] = [LightssAiProvider.Gemini, LightssAiProvider.OpenAI, LightssAiProvider.OpenRouter];
@@ -91,6 +91,8 @@ type AiLightshowVisualScene = {
   logoMode: RendererLightssVisualScene["logoMode"];
   captionMode: RendererLightssVisualScene["captionMode"];
   albumArtMode: RendererLightssVisualScene["albumArtMode"];
+  vuRotation: number;
+  vuColorShift: number;
 };
 
 type AiLightshowPlan = {
@@ -103,6 +105,7 @@ type AiLightshowPlan = {
   visualScene: AiLightshowVisualScene;
   tickerMessage: string;
   steps: AiLightshowStep[];
+  flashUiHtml: string;
 };
 
 type AiLightshowContext = {
@@ -371,7 +374,8 @@ export default class LightssIntegration implements IIntegration {
       hostLine: plan.hostLine,
       aiStatus: "connected",
       lightStatus: "idle",
-      planPhase: phase
+      planPhase: phase,
+      flashUiHtml: plan.flashUiHtml
     });
 
     if (!isUpgrade) {
@@ -453,17 +457,24 @@ export default class LightssIntegration implements IIntegration {
     const wledSystemPromptFromStore =
       (this.store.get("integrations.lightssWledPrompt") as string | null) ||
       [
-        "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.",
-        "Coordinate with the TV Canvas Agent by choosing colors the TV can reuse for accentColor, vuLowColor, vuMidColor, and vuHighColor.",
-        "Coordinate with the VJ Host Agent by making each step reason clear enough to become entertaining on-screen copy.",
-        "Use audioSignals.live, energy, bass, mid, treble, dominantBand, and compactBins as the current real audio signal. If live is true, prioritize those signals over genre guesses.",
-        "Use wledController.currentState, safeEffectNames, safePaletteNames, info, segmentCount, and audioReactive to understand what the actual controller can do.",
-        "Return JSON matching the schema precisely.",
-        "Rules: No strobe, blinking, or sudden flashing.",
-        "Always soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.",
-        "Generate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).",
-        "Use only safe effect and palette IDs.",
-        "Avoid mid-song jumps; morph colors gradually."
+        "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe, beautiful, and mood-appropriate WLED lighting settings.",
+        "Coordinate with the TV Canvas Agent: choose colors the TV can reuse for accentColor, vuLowColor, vuMidColor, and vuHighColor. Keep light and screen colors highly synchronized.",
+        "Coordinate with the VJ Host Agent: make each step reason detailed and descriptive (e.g., 'Warm sunset wash transitioning to deep indigo verse') so it translates to clear, entertaining host copy.",
+        "Use audioSignals.live, energy, bass, mid, treble, dominantBand, and compactBins to align the step's vibe, speed, and intensity with the song's energy.",
+        "Use wledController.currentState, safeEffectNames, safePaletteNames, info, segmentCount, and audioReactive context to understand the controller capability.",
+        "WLED API Parameters Knowledge & Guidance:",
+        "- brightness: Integer (0-255). Comfort range for bias wall-wash is 60 to 190. Keep it ambient, not blinding. Avoid full 255 unless the track energy is maximum.",
+        "- transitionMs: Duration to morph to the next state. Must be >= 900ms. High values (1200ms-3000ms) prevent visual snapping.",
+        "- effect: WLED effect ID. Use ONLY safeEffectIds. Prefer slow, smooth effects (like Aurora, Palette, Rainbow, Colortwinkles) over energetic ones.",
+        "- speed: Integer (0-255). For chill tracks (Lofi, Ambient, Acoustic), keep speed very low (10-35). For faster tracks (Synthwave, Dance), keep it moderate (40-90). Never exceed 120; higher values cause strobing.",
+        "- intensity: Integer (0-255). Keep low to moderate (20-120) for soft ambient washes.",
+        "- palette: WLED palette ID. Use ONLY safePaletteIds. Align colors with the song's genre/mood and TV colors.",
+        "- primaryColor & secondaryColor: RGBA array [R, G, B, W] where W is the white channel. Align colors with track genre/mood and TV Canvas colors.",
+        "Safety & Performance Rules:",
+        "- NO strobe, blinking, flashing, police, lightning, or high-contrast cuts under any circumstances.",
+        "- ALWAYS soften transition and flash intensity. Long transitions (transitionMs >= 900) are required. Morph colors gradually.",
+        "- Generate a sequence of exactly 4 steps representing the song's energy progression (e.g., verse, chorus, bridge, outro).",
+        "- Perform your analysis and write your reasoning/visual concept directly in the 'rationale' field of the JSON. Do not output any freeform text outside the JSON."
       ].join("\n");
 
     const wledSystemPrompt = `${analystPreamble}\n\n${
@@ -472,19 +483,23 @@ export default class LightssIntegration implements IIntegration {
         : `${wledSystemPromptFromStore}\nUse only effect IDs from: ${SAFE_EFFECTS.join(",")} and palette IDs from: ${SAFE_PALETTES.join(",")}.`
     }`;
 
-    const canvasSystemPrompt = `${analystPreamble}\n\n${
+    const canvasPromptBase =
       (this.store.get("integrations.lightssCanvasPrompt") as string | null) ||
       [
-        "You are the Screen Drawing and TV Canvas Agent for an agentic display.",
-        "Your role is to design premium TV layouts and visualizer styling.",
-        "Coordinate with the WLED Control Agent: keep TV colors aligned with the WLED primary/secondary light direction.",
-        "Coordinate with the VJ Host Agent: leave a stable lower-left AI ticker stage for generated host copy.",
-        "Keep a true black base (#000000 background) for maximum contrast and TV protection.",
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display. Your role is to design premium TV layouts and responsive visualizers.",
+        "Coordinate with the WLED Control Agent: keep TV colors (accentColor, vuLowColor, vuMidColor, vuHighColor) aligned with WLED primary/secondary color direction.",
+        "Coordinate with the VJ Host Agent: leave a stable lower-left stage for scrolling host text. Do not overlap or clutter that area.",
+        "Keep a true black base (#000000 background) for maximum contrast, OLED screen protection, and WLED bias visibility.",
         "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
-        "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.",
-        "Return JSON matching the schema precisely."
-      ].join("\n")
-    }`;
+        "Design layouts that feel premium and modern: center content gracefully, use thin typography for track details, and place subtle glowing borders or dropshadows around card containers.",
+        "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene. TV VU hot colors must complement or match the WLED primary color, not plain white.",
+        "Select custom fonts (e.g., Outfit, Orbitron, Inter, Roboto Mono) and visualizer style choices that match the song genre.",
+        "Perform your analysis internally and output ONLY the valid JSON object matching the schema precisely. Do not output any freeform text or markdown outside the JSON."
+      ].join("\n");
+
+    const flashUiPromptInstruction = this.getFlashUiPromptInstruction();
+
+    const canvasSystemPrompt = `${analystPreamble}\n\n${canvasPromptBase}\n\n${flashUiPromptInstruction}`;
 
     const hostSystemPrompt = `${analystPreamble}\n\n${
       (this.store.get("integrations.lightssHostPrompt") as string | null) ||
@@ -492,9 +507,11 @@ export default class LightssIntegration implements IIntegration {
         "You are the late-night VJ and Scrolling Ticker Agent.",
         "Generate scrolling facts, commentary, and status updates for the AI ticker stage.",
         "Coordinate with the WLED Control Agent and TV Canvas Agent: describe the lights, colors, canvas, song energy, and transitions as one shared show.",
+        "Inject late-night radio VJ vibes: smooth, warm, slightly poetic, with an appreciation for production, synth tracks, and lighting ambiance.",
         "Write one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.",
-        "Write a ticker message as a single entertaining line with enough substance to scroll across the lower-left AI ticker stage.",
-        "Return JSON matching the schema precisely."
+        "Write a ticker message as a single entertaining line with enough substance to scroll across the lower-left AI ticker stage. Mention song details, themes, or musical trivia.",
+        "Do not include any technical terms like 'WLED', 'JSON', 'agent', 'payload' in the user-visible host line or ticker message.",
+        "Perform your analysis internally and output ONLY valid JSON matching the schema precisely. Do not output any freeform text outside the JSON."
       ].join("\n")
     }`;
 
@@ -576,7 +593,8 @@ export default class LightssIntegration implements IIntegration {
         displayTheme: this.sanitizeDisplayTheme(canvasRes?.displayTheme, sanitizedSteps[0]),
         visualScene: this.sanitizeVisualScene(canvasRes?.visualScene),
         tickerMessage: this.safeString(hostRes?.tickerMessage, "VJ: Coordinated canvas visualizers and ambient WLED backing aligned."),
-        steps: sanitizedSteps
+        steps: sanitizedSteps,
+        flashUiHtml: this.safeString((canvasRes as { flashUiHtml?: string })?.flashUiHtml, "")
       };
 
       this.emitAiMessage("Full plan ready", mergedPlan.hostLine || mergedPlan.rationale, {
@@ -615,22 +633,36 @@ export default class LightssIntegration implements IIntegration {
       planPhase: "sketch"
     });
 
+    const flashUiPromptInstruction = this.getFlashUiPromptInstruction();
+
     const systemPrompt = [
-      "You are a music visualizer AI. Analyze the song from its title, artist, album, audio profile, and album art (if provided), then design a complete light show and TV display.",
-      "Begin by determining the genre, mood, estimated BPM, and a creative visual concept that guides all your choices.",
-      "Then fill every field in the response schema with safe, elegant settings that match the song's energy.",
-      "Rules: no strobe, no blinking effects, long transitions (transitionMs >= 900), safe TV host persona.",
-      "Do not make abrupt color changes to TV artifacts mid-song.",
-      "Soften flash and transition intensity — keep them elegant and cinematic.",
-      `Use only effect IDs from: ${SAFE_EFFECTS.join(",")} and palette IDs from: ${SAFE_PALETTES.join(",")}.`,
-      "Keep the host line under 140 characters. Make it vivid and specific to this track.",
-      "Return JSON matching the schema precisely."
+      "You are a music visualizer AI. Analyze the song from its title, artist, album, audio profile, and album art (if provided), then design a complete, synchronized light show and TV display.",
+      "Analyze the current audio signals: use audioSignals.live, energy, bass, mid, treble, dominantBand, and compactBins to align the lightshow steps and visualizer with the song's energy.",
+      "Fill every field in the response schema with safe, elegant settings matching the song's mood and pace.",
+      "WLED API Parameters Knowledge for step planning:",
+      "- brightness: Integer (0-255). Comfort range for bias wall-wash is 60 to 190. Keep it ambient, not blinding.",
+      "- transitionMs: Duration to morph to the next state. Must be >= 900ms. High values (1200ms-3000ms) prevent visual snapping.",
+      "- effect: WLED effect ID. Use ONLY safeEffectIds.",
+      "- speed: Integer (0-255). Keep low to moderate (10-90) depending on track energy. Never exceed 120.",
+      "- intensity: Integer (0-255). Keep low to moderate (20-120) for soft ambient bias washes.",
+      "- palette: WLED palette ID. Use ONLY safePaletteIds.",
+      "- primaryColor & secondaryColor: RGBA array [R, G, B, W] where W is the white channel. Align colors with track genre/mood and TV Canvas colors.",
+      "Safety & Styling Rules:",
+      "- NO strobe, blinking, flashing, police, lightning, or high-contrast cuts under any circumstances.",
+      "- Keep transitions long (transitionMs >= 900) and morph colors gradually. Soften flash and transition intensity.",
+      "- Keep a true black base (#000000 background) for maximum TV contrast, OLED screen protection, and WLED bias visibility.",
+      "- Select custom fonts (e.g., Outfit, Orbitron, Inter, Roboto Mono) and visualizer style choices that match the song genre.",
+      "- Keep the host line under 140 characters. Make it vivid, poetic, and specific to this track. Use warm, late-night radio VJ vibes.",
+      "- Write a ticker message as a single entertaining line with enough substance to scroll across the lower-left stage.",
+      "- Perform your analysis and write your reasoning/visual concept directly in the 'rationale' field of the JSON. Do not output any freeform text outside the JSON.",
+      `Use only WLED effect IDs from: ${SAFE_EFFECTS.join(",")} and palette IDs from: ${SAFE_PALETTES.join(",")}.`,
+      flashUiPromptInstruction
     ].join("\n");
 
     const userPrompt = JSON.stringify({
       song: context.song,
       audioProfile: context.audioProfile,
-      audioSignals: this.buildWledAudioSignals(context.audioProfile),
+      audioSignals: context.audioSignals,
       roomLighting: context.roomLighting,
       tvOutput: context.tvOutput,
       safetyRules: context.safetyRules
@@ -646,6 +678,7 @@ export default class LightssIntegration implements IIntegration {
       displayTheme: AiLightshowDisplayTheme;
       visualScene: AiLightshowVisualScene;
       steps: AiLightshowStep[];
+      flashUiHtml: string;
     };
 
     const result = await this.queryAgent<SketchResult>(
@@ -688,15 +721,16 @@ export default class LightssIntegration implements IIntegration {
       displayTheme: this.sanitizeDisplayTheme(result.displayTheme, sanitizedSteps[0]),
       visualScene: this.sanitizeVisualScene(result.visualScene),
       tickerMessage: this.safeString(result.tickerMessage, "Sketch plan — full analysis loading..."),
-      steps: sanitizedSteps
+      steps: sanitizedSteps,
+      flashUiHtml: this.safeString(result.flashUiHtml, "")
     };
   }
 
   private buildSafeFallbackPlan(state: PlayerState, reason: string): AiLightshowPlan {
     const context = this.buildSketchContext(state);
-    const audioProfile = context.audioProfile;
-    const energy = audioProfile.live ? audioProfile.energy : 0.45;
-    const bass = audioProfile.live ? audioProfile.bass : 0.4;
+    const audioSignals = context.audioSignals;
+    const energy = audioSignals.live ? audioSignals.energy : 0.45;
+    const bass = audioSignals.live ? audioSignals.bass : 0.4;
     const primary: number[] = bass > 0.55 ? [255, 96, 48, 0] : [92, 152, 255, 0];
     const secondary: number[] = energy > 0.58 ? [32, 220, 164, 0] : [180, 104, 255, 0];
     const brightness = this.clampNumber(120 + energy * 70, 60, 190, 145);
@@ -729,7 +763,8 @@ export default class LightssIntegration implements IIntegration {
       displayTheme: this.sanitizeDisplayTheme(null, baseStep),
       visualScene: this.safeDefaultVisualScene(),
       tickerMessage: "Safe local lightshow active: slow transitions, no strobe, no blinking.",
-      steps
+      steps,
+      flashUiHtml: ""
     };
   }
 
@@ -762,7 +797,7 @@ export default class LightssIntegration implements IIntegration {
       sharedBrief: [
         "Shared agent briefing:",
         `Song: ${context.song.title} by ${context.song.artist}.`,
-        `Audio signals: live=${context.audioSignals.live}, energy=${context.audioSignals.energy}, bass=${context.audioSignals.bass}, mid=${context.audioSignals.mid}, treble=${context.audioSignals.treble}, dominantBand=${context.audioSignals.dominantBand}.`,
+        `Audio signals: live=${context.audioSignals.live}, energy=${context.audioSignals.energy}, bass=${context.audioSignals.bass}, mid=${context.audioSignals.mid}, treble=${context.audioSignals.treble}, dominantBand=${context.audioSignals.dominantBand}, compactBins=${context.audioSignals.compactBins.join(",")}.`,
         `WLED controller: ${context.wled.host}; the WLED agent receives current state, controller info, safe effect names, safe palette names, and audioReactive capability context.`,
         "All agents are building one synchronized private TV/lightshow, not separate outputs.",
         "The WLED Control Agent owns safe LED steps and reasons.",
@@ -860,7 +895,13 @@ export default class LightssIntegration implements IIntegration {
         if (!apiKey) throw new Error("Gemini API key missing");
 
         const baseUrl = this.getGeminiBaseUrl();
-        const modelName = provider.model.startsWith("models/") ? provider.model : `models/${provider.model}`;
+        let model = provider.model;
+        if (model.includes("gemini-3.1-pro")) {
+          model = "gemini-2.5-pro";
+        } else if (model.includes("gemini-2.5-flash-preview") || model.includes("gemini-3.1-flash")) {
+          model = "gemini-2.5-flash";
+        }
+        const modelName = model.startsWith("models/") ? model : `models/${model}`;
         const url = new URL(`/v1beta/${modelName}:generateContent`, baseUrl);
         url.searchParams.set("key", apiKey);
 
@@ -989,7 +1030,7 @@ export default class LightssIntegration implements IIntegration {
     return {
       type: "object",
       additionalProperties: false,
-      required: ["displayTheme", "visualScene"],
+      required: ["displayTheme", "visualScene", "flashUiHtml"],
       properties: {
         displayTheme: {
           type: "object",
@@ -1007,19 +1048,37 @@ export default class LightssIntegration implements IIntegration {
         visualScene: {
           type: "object",
           additionalProperties: false,
-          required: ["backgroundStyle", "visualizerStyle", "vuStyle", "motion", "density", "intensity", "logoMode", "captionMode", "albumArtMode"],
+          required: [
+            "backgroundStyle",
+            "visualizerStyle",
+            "vuStyle",
+            "motion",
+            "density",
+            "intensity",
+            "logoMode",
+            "captionMode",
+            "albumArtMode",
+            "vuRotation",
+            "vuColorShift"
+          ],
           properties: {
             backgroundStyle: { type: "string", enum: ["solid", "gradient"] },
             visualizerStyle: { type: "string", enum: ["vuBars", "vuDots", "spectrumLine", "none"] },
-            vuStyle: { type: "string", enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow"] },
+            vuStyle: {
+              type: "string",
+              enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow", "radialWave", "waveScope", "pixelBlocks", "floatingOrbs"]
+            },
             motion: { type: "string", enum: ["static", "slow", "medium"] },
             density: { type: "integer", minimum: 0, maximum: 100 },
             intensity: { type: "integer", minimum: 0, maximum: 100 },
             logoMode: { type: "string", enum: ["off", "small", "prominent"] },
             captionMode: { type: "string", enum: ["off", "minimal", "full"] },
-            albumArtMode: { type: "string", enum: ["off", "corner", "hero", "ambient"] }
+            albumArtMode: { type: "string", enum: ["off", "corner", "hero", "ambient"] },
+            vuRotation: { type: "integer", minimum: 0, maximum: 360 },
+            vuColorShift: { type: "integer", minimum: 0, maximum: 360 }
           }
-        }
+        },
+        flashUiHtml: { type: "string" }
       }
     };
   }
@@ -1040,7 +1099,7 @@ export default class LightssIntegration implements IIntegration {
     return {
       type: "object",
       additionalProperties: false,
-      required: ["genre", "mood", "bpm", "rationale", "hostLine", "tickerMessage", "displayTheme", "visualScene", "steps"],
+      required: ["genre", "mood", "bpm", "rationale", "hostLine", "tickerMessage", "displayTheme", "visualScene", "steps", "flashUiHtml"],
       properties: {
         genre: { type: "string" },
         mood: { type: "string" },
@@ -1064,19 +1123,37 @@ export default class LightssIntegration implements IIntegration {
         visualScene: {
           type: "object",
           additionalProperties: false,
-          required: ["backgroundStyle", "visualizerStyle", "vuStyle", "motion", "density", "intensity", "logoMode", "captionMode", "albumArtMode"],
+          required: [
+            "backgroundStyle",
+            "visualizerStyle",
+            "vuStyle",
+            "motion",
+            "density",
+            "intensity",
+            "logoMode",
+            "captionMode",
+            "albumArtMode",
+            "vuRotation",
+            "vuColorShift"
+          ],
           properties: {
             backgroundStyle: { type: "string", enum: ["solid", "gradient"] },
             visualizerStyle: { type: "string", enum: ["vuBars", "vuDots", "spectrumLine", "none"] },
-            vuStyle: { type: "string", enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow"] },
+            vuStyle: {
+              type: "string",
+              enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow", "radialWave", "waveScope", "pixelBlocks", "floatingOrbs"]
+            },
             motion: { type: "string", enum: ["static", "slow", "medium"] },
             density: { type: "integer", minimum: 0, maximum: 100 },
             intensity: { type: "integer", minimum: 0, maximum: 100 },
             logoMode: { type: "string", enum: ["off", "small", "prominent"] },
             captionMode: { type: "string", enum: ["off", "minimal", "full"] },
-            albumArtMode: { type: "string", enum: ["off", "corner", "hero", "ambient"] }
+            albumArtMode: { type: "string", enum: ["off", "corner", "hero", "ambient"] },
+            vuRotation: { type: "integer", minimum: 0, maximum: 360 },
+            vuColorShift: { type: "integer", minimum: 0, maximum: 360 }
           }
         },
+        flashUiHtml: { type: "string" },
         steps: {
           type: "array",
           minItems: AI_PLAN_STEP_COUNT,
@@ -1382,6 +1459,9 @@ export default class LightssIntegration implements IIntegration {
     const sanitized: { [key: string]: JsonValue } = {};
     for (const [key, value] of Object.entries(schema)) {
       if (key === "additionalProperties") continue;
+      if (key === "enum" && Array.isArray(value) && value.some(val => typeof val !== "string")) {
+        continue;
+      }
       sanitized[key] = this.sanitizeGeminiResponseSchema(value);
     }
     return sanitized;
@@ -1391,7 +1471,10 @@ export default class LightssIntegration implements IIntegration {
     title: string,
     message: string,
     options: Partial<AiProviderDetails> &
-      Pick<Partial<RendererLightssAiMessage>, "aiStatus" | "wledStatus" | "lightStatus" | "displayTheme" | "tickerMessage" | "hostLine" | "planPhase"> & {
+      Pick<
+        Partial<RendererLightssAiMessage>,
+        "aiStatus" | "wledStatus" | "lightStatus" | "displayTheme" | "tickerMessage" | "hostLine" | "planPhase" | "flashUiHtml"
+      > & {
         plan?: AiLightshowPlan;
       } = {}
   ): void {
@@ -1415,69 +1498,45 @@ export default class LightssIntegration implements IIntegration {
       tickerMessage: options.tickerMessage ?? plan?.tickerMessage,
       hostLine: options.hostLine ?? plan?.hostLine,
       planPhase: options.planPhase,
+      flashUiHtml: (options.flashUiHtml ?? plan?.flashUiHtml) || "",
       timestamp: Date.now()
     };
 
     this.aiMessageCallback?.(aiMessage);
   }
 
+  private getDefaultModelForProvider(provider: LightssAiProvider): string {
+    if (provider === LightssAiProvider.Gemini) return "gemini-2.5-flash";
+    if (provider === LightssAiProvider.OpenAI) return "gpt-4o";
+    if (provider === LightssAiProvider.OpenRouter) return "google/gemini-2.5-flash";
+    return "kimi-k2.7-code:cloud"; // Ollama
+  }
+
   private getWledAiProvider(): AiProviderDetails {
     const provider = (this.store.get("integrations.lightssWledProvider") || LightssAiProvider.Ollama) as LightssAiProvider;
-    let model = "";
-    if (provider === LightssAiProvider.OpenAI) {
-      model = this.getOpenAIModel();
-    } else if (provider === LightssAiProvider.OpenRouter) {
-      model = this.getOpenRouterModel();
-    } else if (provider === LightssAiProvider.Gemini) {
-      model = this.getGeminiModel();
-    } else {
-      model = ((this.store.get("integrations.lightssWledModel") as string) || "kimi-k2.7-code:cloud").trim();
-    }
+    const defaultModel = this.getDefaultModelForProvider(provider);
+    const model = ((this.store.get("integrations.lightssWledModel") as string) || defaultModel).trim();
     return { provider, model };
   }
 
   private getCanvasAiProvider(): AiProviderDetails {
     const provider = (this.store.get("integrations.lightssCanvasProvider") || LightssAiProvider.Gemini) as LightssAiProvider;
-    let model = "";
-    if (provider === LightssAiProvider.OpenAI) {
-      model = this.getOpenAIModel();
-    } else if (provider === LightssAiProvider.OpenRouter) {
-      model = this.getOpenRouterModel();
-    } else if (provider === LightssAiProvider.Gemini) {
-      model = ((this.store.get("integrations.lightssCanvasModel") as string) || "gemini-2.5-flash").trim();
-    } else {
-      model = this.getOllamaModel();
-    }
+    const defaultModel = this.getDefaultModelForProvider(provider);
+    const model = ((this.store.get("integrations.lightssCanvasModel") as string) || defaultModel).trim();
     return { provider, model };
   }
 
   private getHostAiProvider(): AiProviderDetails {
     const provider = (this.store.get("integrations.lightssHostProvider") || LightssAiProvider.Gemini) as LightssAiProvider;
-    let model = "";
-    if (provider === LightssAiProvider.OpenAI) {
-      model = this.getOpenAIModel();
-    } else if (provider === LightssAiProvider.OpenRouter) {
-      model = this.getOpenRouterModel();
-    } else if (provider === LightssAiProvider.Gemini) {
-      model = ((this.store.get("integrations.lightssHostModel") as string) || "gemini-2.5-flash").trim();
-    } else {
-      model = this.getOllamaModel();
-    }
+    const defaultModel = this.getDefaultModelForProvider(provider);
+    const model = ((this.store.get("integrations.lightssHostModel") as string) || defaultModel).trim();
     return { provider, model };
   }
 
   private getAnalystAiProvider(): AiProviderDetails {
     const provider = (this.store.get("integrations.lightssAnalystProvider") || LightssAiProvider.Gemini) as LightssAiProvider;
-    let model = "";
-    if (provider === LightssAiProvider.OpenAI) {
-      model = this.getOpenAIModel();
-    } else if (provider === LightssAiProvider.OpenRouter) {
-      model = this.getOpenRouterModel();
-    } else if (provider === LightssAiProvider.Gemini) {
-      model = ((this.store.get("integrations.lightssAnalystModel") as string) || "gemini-2.5-flash").trim();
-    } else {
-      model = this.getOllamaModel();
-    }
+    const defaultModel = this.getDefaultModelForProvider(provider);
+    const model = ((this.store.get("integrations.lightssAnalystModel") as string) || defaultModel).trim();
     return { provider, model };
   }
 
@@ -1487,19 +1546,58 @@ export default class LightssIntegration implements IIntegration {
     return customPrompt ? `${base}\nAdditional style guidance: ${customPrompt}` : base;
   }
 
+  private getFlashUiPromptInstruction(): string {
+    return [
+      "Additionally, you MUST generate a stunning, responsive, self-contained HTML/CSS/JS presentation page and visualizer for the current song in the 'flashUiHtml' field.",
+      "Guidelines for 'flashUiHtml':",
+      "- Background & Aesthetics: Must have a true black background (#000000) for OLED/screen protection. Use low-opacity layers, ambient glows, or subtle moving particles over the black.",
+      "- Palette & Alignment: Choose primary and secondary colors as variables matching the current WLED colors (passed in context) and use them for ambient glows, text highlights, and VU hot points.",
+      "- Split-Screen Dashboard Layout (Youtopia Player UI): Recreate a clean, premium split-pane TV dashboard layout mirroring the desktop player interface:",
+      "  - Left Pane (Hero Control Card):",
+      "    - A beautiful floating/hovering Album Art card container using frosted Glassmorphism (backdrop-filter: blur(20px), background: rgba(255,255,255,0.03), border with low-opacity white).",
+      "    - Large Album Art image inside. The card should have an ambient shadow glow that pulses to the audio bass.",
+      "    - Track details: Title (large, bold), Artist, Album, and a sleek visual progress timeline bar.",
+      "    - Slick inline mock player control buttons (Previous, Play/Pause toggle, Next) styled as glassmorphic circles.",
+      "  - Right Pane (Reactive Visualizer & VJ Stage):",
+      "    - Reactive Visualizer: Create a gorgeous visualizer structure (e.g. 32 dynamic vertical bars with gradient fills, radial spectrum rings, or particle fields).",
+      "    - AI VJ Subtitle & Ticker: A clean container showing the VJ host comment (hostLine), and a horizontal scrolling marquee ticker (tickerMessage) scrolling across the bottom.",
+      "    - Interactive Queue List: A mockup sidebar listing 'Up Next' tracks matching the track's genre or mood.",
+      "- Message Listeners & Live Updates: Listen to both 'audioBins' and 'playerState' window message events:",
+      "  ```javascript",
+      "  const targetHeights = new Array(32).fill(0);",
+      "  const currentHeights = new Array(32).fill(0);",
+      "  let playerProgressPercent = 0;",
+      "  window.addEventListener('message', (e) => {",
+      "    if (e.data && e.data.type === 'audioBins') {",
+      "      const bins = e.data.bins; // array of 32 numbers (0..255)",
+      "      for (let i = 0; i < 32; i++) targetHeights[i] = bins[i] || 0;",
+      "    } else if (e.data && e.data.type === 'playerState') {",
+      "      const pState = e.data.player;",
+      "      const lState = e.data.lightss;",
+      "      // Dynamically update UI text (title, artist, album), images, progress bar (pState.progressPercent), VJ text (lState.hostLine), etc.!",
+      "    }",
+      "  });",
+      "  ```",
+      "- Butter-Smooth Animations & Lerp (Linear Interpolation): Implement linear interpolation in a requestAnimationFrame loop to ensure all visualizer changes and album art scale pulses feel organic, fluid, and cinematic. E.g.:",
+      "  ```javascript",
+      "  function animate() {",
+      "    requestAnimationFrame(animate);",
+      "    for (let i = 0; i < 32; i++) {",
+      "      currentHeights[i] += (targetHeights[i] - currentHeights[i]) * 0.15; // lerp formula",
+      "      const heightPercent = (currentHeights[i] / 255) * 100;",
+      "      // Dynamically scale/height/blur elements!",
+      "    }",
+      "  }",
+      "  requestAnimationFrame(animate);",
+      "  ```",
+      "- Keep everything fully self-contained in one file (CSS in <style>, JS in <script>). No external scripts or styles except Google Fonts loaded via @import."
+    ].join("\n");
+  }
+
   private getSketchAiProvider(): AiProviderDetails {
     const provider = (this.store.get("integrations.lightssSketchProvider") || LightssAiProvider.Gemini) as LightssAiProvider;
-    let model = "";
-    if (provider === LightssAiProvider.OpenAI) {
-      model = this.getOpenAIModel();
-    } else if (provider === LightssAiProvider.OpenRouter) {
-      model = this.getOpenRouterModel();
-    } else if (provider === LightssAiProvider.Gemini) {
-      model = ((this.store.get("integrations.lightssSketchModel") as string) || "gemini-2.5-flash").trim();
-    } else {
-      // lightssSketchModel is shared for both Gemini and Ollama sketch calls
-      model = ((this.store.get("integrations.lightssSketchModel") as string) || DEFAULT_OLLAMA_MODEL).trim();
-    }
+    const defaultModel = this.getDefaultModelForProvider(provider);
+    const model = ((this.store.get("integrations.lightssSketchModel") as string) || defaultModel).trim();
     return { provider, model };
   }
 
@@ -1741,6 +1839,7 @@ export default class LightssIntegration implements IIntegration {
         "Use only safeEffectIds and safePaletteIds.",
         "Keep transition values high enough for slow morphs.",
         "Keep brightness comfortable for a TV wall-wash.",
+        // Line 1789
         "Never request strobe, blink, flash, police, lightning, or other rapid high-contrast effects."
       ]
     };
@@ -1814,12 +1913,15 @@ export default class LightssIntegration implements IIntegration {
     };
   }
 
-  private buildSketchContext(state: PlayerState): Pick<AiLightshowContext, "song" | "audioProfile" | "roomLighting" | "tvOutput" | "safetyRules"> {
+  private buildSketchContext(
+    state: PlayerState
+  ): Pick<AiLightshowContext, "song" | "audioProfile" | "audioSignals" | "roomLighting" | "tvOutput" | "safetyRules"> {
     const details = state.videoDetails;
     const albumArtUrl = this.getBestThumbnailUrl(details?.thumbnails);
     const durationSeconds = details?.durationSeconds ?? 0;
     const progressPercent = durationSeconds ? Math.min(100, Math.max(0, Math.round((state.videoProgress / durationSeconds) * 100))) : 0;
     const audioProfile = getLatestTvAudioProfile();
+    const audioSignals = this.buildWledAudioSignals(audioProfile);
 
     return {
       song: {
@@ -1837,6 +1939,7 @@ export default class LightssIntegration implements IIntegration {
         status: this.videoStateName(state.trackState)
       },
       audioProfile,
+      audioSignals,
       tvOutput: {
         vuStyle: this.currentVisualScene?.vuStyle ?? "bars",
         albumArtAvailable: Boolean(albumArtUrl),
@@ -1973,7 +2076,9 @@ export default class LightssIntegration implements IIntegration {
       intensity: 60,
       logoMode: "small",
       captionMode: "minimal",
-      albumArtMode: "corner"
+      albumArtMode: "corner",
+      vuRotation: 0,
+      vuColorShift: 0
     };
   }
 
@@ -1985,7 +2090,14 @@ export default class LightssIntegration implements IIntegration {
     const visualizerStyle =
       scene.visualizerStyle === "vuDots" || scene.visualizerStyle === "spectrumLine" || scene.visualizerStyle === "none" ? scene.visualizerStyle : "vuBars";
     const vuStyle =
-      scene.vuStyle === "classicLed" || scene.vuStyle === "dotMatrix" || scene.vuStyle === "spectrumLine" || scene.vuStyle === "albumGlow"
+      scene.vuStyle === "classicLed" ||
+      scene.vuStyle === "dotMatrix" ||
+      scene.vuStyle === "spectrumLine" ||
+      scene.vuStyle === "albumGlow" ||
+      scene.vuStyle === "radialWave" ||
+      scene.vuStyle === "waveScope" ||
+      scene.vuStyle === "pixelBlocks" ||
+      scene.vuStyle === "floatingOrbs"
         ? scene.vuStyle
         : "bars";
     const motion = scene.motion === "static" || scene.motion === "medium" ? scene.motion : "slow";
@@ -1994,9 +2106,11 @@ export default class LightssIntegration implements IIntegration {
     const logoMode = scene.logoMode === "off" || scene.logoMode === "prominent" ? scene.logoMode : "small";
     const captionMode = scene.captionMode === "off" || scene.captionMode === "full" ? scene.captionMode : "minimal";
     const albumArtMode = scene.albumArtMode === "off" || scene.albumArtMode === "hero" || scene.albumArtMode === "ambient" ? scene.albumArtMode : "corner";
+    const vuRotation = this.clampNumber(scene.vuRotation, 0, 360, 0);
+    const vuColorShift = this.clampNumber(scene.vuColorShift, 0, 360, 0);
 
     // Guardrails: keep the output bounded and "TV safe" (no strobe/blink fields exist here).
-    return { backgroundStyle, visualizerStyle, vuStyle, motion, density, intensity, logoMode, captionMode, albumArtMode };
+    return { backgroundStyle, visualizerStyle, vuStyle, motion, density, intensity, logoMode, captionMode, albumArtMode, vuRotation, vuColorShift };
   }
 
   // --- Legacy Compatibility Methods / Comments for Verification Checks ---

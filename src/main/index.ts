@@ -189,6 +189,7 @@ const ytmViewIntegrationScripts: { [name: string]: { [name: string]: string } } 
 
 let mainWindow: BrowserWindow = null;
 let settingsWindow: BrowserWindow = null;
+let flashUiWindow: BrowserWindow = null;
 let ytmView: BrowserView = null;
 let tray: Tray = null;
 let trayContextMenu = null;
@@ -631,7 +632,7 @@ const store = new Conf<StoreSchema>({
       lightssWledPrompt:
         "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.\nReturn JSON matching the schema precisely.\nRules: No strobe, blinking, or sudden flashing.\nAlways soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.\nGenerate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).\nUse only safe effect and palette IDs.\nAvoid mid-song jumps; morph colors gradually.",
       lightssCanvasPrompt:
-        "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely.",
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nChoose from the available visualizer styles (vuStyle): bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope line), pixelBlocks (retro block grid), and floatingOrbs (bouncing bubbles).\nSet the vuRotation (0 to 360 degrees) and vuColorShift (0 to 360 degrees hue shift) to rotate and recolor the visualizer to match the track.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely.",
       lightssHostPrompt:
         "You are the late-night VJ and Scrolling Ticker Agent.\nGenerate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.\nWrite one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.\nWrite a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.\nReturn JSON matching the schema precisely.",
       audioCompressorEnabled: true,
@@ -813,22 +814,84 @@ const store = new Conf<StoreSchema>({
       if (!store.has("integrations.lightssPythonPath")) {
         store.set("integrations.lightssPythonPath", null);
       }
-      if (!store.has("integrations.lightssWledPrompt")) {
+      const oldWled =
+        "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.\nReturn JSON matching the schema precisely.\nRules: No strobe, blinking, or sudden flashing.\nAlways soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.\nGenerate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).\nUse only safe effect and palette IDs.\nAvoid mid-song jumps; morph colors gradually.";
+      const oldCanvas =
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely.";
+      const oldHost =
+        "You are the late-night VJ and Scrolling Ticker Agent.\nGenerate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.\nWrite one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.\nWrite a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.\nReturn JSON matching the schema precisely.";
+
+      const currentWled = store.get("integrations.lightssWledPrompt") as string | null;
+      if (!currentWled || currentWled === oldWled) {
         store.set(
           "integrations.lightssWledPrompt",
-          "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.\nReturn JSON matching the schema precisely.\nRules: No strobe, blinking, or sudden flashing.\nAlways soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.\nGenerate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).\nUse only safe effect and palette IDs.\nAvoid mid-song jumps; morph colors gradually."
+          [
+            "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe, beautiful, and mood-appropriate WLED lighting settings.",
+            "Coordinate with the TV Canvas Agent: choose colors the TV can reuse for accentColor, vuLowColor, vuMidColor, and vuHighColor. Keep light and screen colors highly synchronized.",
+            "Coordinate with the VJ Host Agent: make each step reason detailed and descriptive (e.g., 'Warm sunset wash transitioning to deep indigo verse') so it translates to clear, entertaining host copy.",
+            "Analyze the current audio signals: use audioSignals.live, energy, bass, mid, treble, dominantBand, and compactBins to align the step's vibe, speed, and intensity with the song's energy.",
+            "WLED API Parameters Knowledge & Guidance:",
+            "- brightness: Integer (0-255). Comfort range for bias wall-wash is 60 to 190. Keep it ambient, not blinding. Avoid full 255 unless the track energy is maximum.",
+            "- transitionMs: Duration to morph to the next state. Must be >= 900ms. High values (1200ms-3000ms) prevent visual snapping.",
+            "- effect: WLED effect ID. Use ONLY safeEffectIds. Prefer slow, smooth effects (like Aurora, Palette, Rainbow, Colortwinkles) over energetic ones.",
+            "- speed: Integer (0-255). For chill tracks (Lofi, Ambient, Acoustic), keep speed very low (10-35). For faster tracks (Synthwave, Dance), keep it moderate (40-90). Never exceed 120; higher values cause strobing.",
+            "- intensity: Integer (0-255). Keep low to moderate (20-120) for soft ambient washes.",
+            "- palette: WLED palette ID. Use ONLY safePaletteIds. Align colors with the song's genre/mood and TV colors.",
+            "- primaryColor & secondaryColor: RGBA array [R, G, B, W] where W is the white channel. Align colors with track genre/mood and TV Canvas colors.",
+            "Safety & Performance Rules:",
+            "- NO strobe, blinking, flashing, police, lightning, or high-contrast cuts under any circumstances.",
+            "- ALWAYS soften transition and flash intensity. Long transitions (transitionMs >= 900) are required. Morph colors gradually.",
+            "- Generate a sequence of exactly 4 steps representing the song's energy progression (e.g., verse, chorus, bridge, outro).",
+            "- Perform your analysis and write your reasoning/visual concept directly in the 'rationale' field of the JSON. Do not output any freeform text outside the JSON."
+          ].join("\n")
         );
       }
-      if (!store.has("integrations.lightssCanvasPrompt")) {
+
+      const currentCanvas = store.get("integrations.lightssCanvasPrompt") as string | null;
+      const oldCanvas9Line = [
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display. Your role is to design premium TV layouts and responsive visualizers.",
+        "Coordinate with the WLED Control Agent: keep TV colors (accentColor, vuLowColor, vuMidColor, vuHighColor) aligned with WLED primary/secondary color direction.",
+        "Coordinate with the VJ Host Agent: leave a stable lower-left stage for scrolling host text. Do not overlap or clutter that area.",
+        "Keep a true black base (#000000 background) for maximum contrast, OLED screen protection, and WLED bias visibility.",
+        "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
+        "Design layouts that feel premium and modern: center content gracefully, use thin typography for track details, and place subtle glowing borders or dropshadows around card containers.",
+        "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene. TV VU hot colors must complement or match the WLED primary color, not plain white.",
+        "Select custom fonts (e.g., Outfit, Orbitron, Inter, Roboto Mono) and visualizer style choices that match the song genre.",
+        "Perform your analysis internally and output ONLY the valid JSON object matching the schema precisely. Do not output any freeform text or markdown outside the JSON."
+      ].join("\n");
+      if (!currentCanvas || currentCanvas === oldCanvas || currentCanvas === oldCanvas9Line) {
         store.set(
           "integrations.lightssCanvasPrompt",
-          "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely."
+          [
+            "You are the Screen Drawing and TV Canvas Agent for an agentic display. Your role is to design premium TV layouts and responsive visualizers.",
+            "Coordinate with the WLED Control Agent: keep TV colors (accentColor, vuLowColor, vuMidColor, vuHighColor) aligned with WLED primary/secondary color direction.",
+            "Coordinate with the VJ Host Agent: leave a stable lower-left stage for scrolling host text. Do not overlap or clutter that area.",
+            "Keep a true black base (#000000 background) for maximum contrast, OLED screen protection, and WLED bias visibility.",
+            "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
+            "Choose a visualizer style (vuStyle) from: bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope), pixelBlocks (retro blocks), or floatingOrbs (bouncing bubbles).",
+            "Set vuRotation (0-360) to rotate the visualizer dynamically, and vuColorShift (0-360) to recolor it via hue shift filter.",
+            "Design layouts that feel premium and modern: center content gracefully, use thin typography for track details, and place subtle glowing borders or dropshadows around card containers.",
+            "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene. TV VU hot colors must complement or match the WLED primary color, not plain white.",
+            "Select custom fonts (e.g., Outfit, Orbitron, Inter, Roboto Mono) and visualizer style choices that match the song genre.",
+            "Perform your analysis internally and output ONLY the valid JSON object matching the schema precisely. Do not output any freeform text or markdown outside the JSON."
+          ].join("\n")
         );
       }
-      if (!store.has("integrations.lightssHostPrompt")) {
+
+      const currentHost = store.get("integrations.lightssHostPrompt") as string | null;
+      if (!currentHost || currentHost === oldHost) {
         store.set(
           "integrations.lightssHostPrompt",
-          "You are the late-night VJ and Scrolling Ticker Agent.\nGenerate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.\nWrite one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.\nWrite a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.\nReturn JSON matching the schema precisely."
+          [
+            "You are the late-night VJ and Scrolling Ticker Agent.",
+            "Generate scrolling facts, commentary, and status updates for the AI ticker stage.",
+            "Coordinate with the WLED Control Agent and TV Canvas Agent: describe the lights, colors, canvas, song energy, and transitions as one shared show.",
+            "Inject late-night radio VJ vibes: smooth, warm, slightly poetic, with an appreciation for production, synth tracks, and lighting ambiance.",
+            "Write one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.",
+            "Write a ticker message as a single entertaining line with enough substance to scroll across the lower-left AI ticker stage. Mention song details, themes, or musical trivia.",
+            "Do not include any technical terms like 'WLED', 'JSON', 'agent', 'payload' in the user-visible host line or ticker message.",
+            "Perform your analysis internally and output ONLY valid JSON matching the schema precisely. Do not output any freeform text outside the JSON."
+          ].join("\n")
         );
       }
       if (!store.has("integrations.audioCompressorEnabled")) {
@@ -845,6 +908,32 @@ const store = new Conf<StoreSchema>({
       }
       if (!store.has("integrations.audioCompressorRelease")) {
         store.set("integrations.audioCompressorRelease", 0.25);
+      }
+
+      // Automated startup configuration migrations to fix retired or unsupported Gemini preview/experimental model names
+      const keysToMigrate = [
+        "integrations.lightssWledModel",
+        "integrations.lightssCanvasModel",
+        "integrations.lightssHostModel",
+        "integrations.lightssAnalystModel",
+        "integrations.lightssSketchModel",
+        "integrations.lightssGeminiModel"
+      ];
+      for (const key of keysToMigrate) {
+        if (store.has(key)) {
+          const val = store.get(key) as string;
+          if (val && typeof val === "string") {
+            let updated = val.trim();
+            if (updated.includes("gemini-3.1-pro")) {
+              updated = "gemini-2.5-pro";
+            } else if (updated.includes("gemini-2.5-flash-preview") || updated.includes("gemini-3.1-flash")) {
+              updated = "gemini-2.5-flash";
+            }
+            if (updated !== val) {
+              store.set(key, updated);
+            }
+          }
+        }
       }
     }
   }
@@ -1360,6 +1449,49 @@ function openExternalFromYtmView(urlString: string) {
     shell.openExternal(urlString);
   }
 }
+
+const createOrShowFlashUiWindow = (): void => {
+  if (mainWindow === null) {
+    return;
+  }
+
+  if (flashUiWindow !== null) {
+    if (!flashUiWindow.isVisible()) {
+      flashUiWindow.show();
+    }
+    flashUiWindow.focus();
+    return;
+  }
+
+  const mainWindowBounds = mainWindow.getBounds();
+
+  flashUiWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    x: Math.round(mainWindowBounds.x + (mainWindowBounds.width / 2 - 600)),
+    y: Math.round(mainWindowBounds.y + (mainWindowBounds.height / 2 - 400)),
+    show: false,
+    icon: getIconPath("ytmd.png"),
+    title: "Flash UI",
+    autoHideMenuBar: true,
+    webPreferences: {
+      sandbox: true,
+      contextIsolation: true,
+      devTools: store.get("developer.enableDevTools")
+    }
+  });
+
+  flashUiWindow.once("closed", () => {
+    flashUiWindow = null;
+  });
+
+  flashUiWindow.on("ready-to-show", () => {
+    flashUiWindow.show();
+    flashUiWindow.focus();
+  });
+
+  flashUiWindow.loadURL("http://127.0.0.1:9863/tv/flash-ui");
+};
 
 const createOrShowSettingsWindow = (): void => {
   if (mainWindow === null) {
@@ -2016,6 +2148,12 @@ app.on("ready", async () => {
     createOrShowSettingsWindow();
   });
 
+  ipcMain.on("flashUiWindow:open", event => {
+    if (event.sender !== mainWindow.webContents) return;
+
+    createOrShowFlashUiWindow();
+  });
+
   ipcMain.on("settingsWindow:minimize", event => {
     if (settingsWindow !== null) {
       if (event.sender !== settingsWindow.webContents) return;
@@ -2238,6 +2376,226 @@ app.on("ready", async () => {
 
     return safeStorage.encryptString(value).toString("hex");
   });
+
+  ipcMain.handle("ai:fetchModels", async (event, provider: string, baseUrl?: string, apiKey?: string) => {
+    if ((!settingsWindow || event.sender !== settingsWindow.webContents) && (!mainWindow || event.sender !== mainWindow.webContents)) {
+      return [];
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      if (provider === "ollama") {
+        const url = (baseUrl || store.get("integrations.lightssOllamaBaseUrl") || "http://10.27.27.10:11434").trim();
+        const res = await fetch(`${url.replace(/\/+$/, "")}/api/tags`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Ollama returned status ${res.status}`);
+        const data = (await res.json()) as { models?: Array<{ name: string }> };
+        return (data.models || []).map(m => m.name);
+      } else if (provider === "gemini") {
+        const key = (apiKey || store.get("integrations.lightssGeminiApiKey") || process.env.GEMINI_API_KEY || "").trim();
+        const base = (baseUrl || store.get("integrations.lightssGeminiBaseUrl") || "https://generativelanguage.googleapis.com").trim();
+        if (!key) return [];
+        // Extract standard base URL for models endpoint if custom base is the default google one
+        let queryUrl = `${base.replace(/\/+$/, "")}/v1beta/models?key=${key}`;
+        if (base.includes("generativelanguage.googleapis.com")) {
+          queryUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+        } else {
+          queryUrl = `${base.replace(/\/+$/, "")}/models?key=${key}`;
+        }
+        const res = await fetch(queryUrl, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Gemini returned status ${res.status}`);
+        const data = (await res.json()) as { models?: Array<{ name: string; supportedGenerationMethods?: string[] }> };
+        return (data.models || []).filter(m => m.supportedGenerationMethods?.includes("generateContent")).map(m => m.name.replace(/^models\//, ""));
+      } else if (provider === "openai") {
+        const key = (apiKey || store.get("integrations.lightssOpenAIApiKey") || process.env.OPENAI_API_KEY || "").trim();
+        if (!key) return [];
+        const res = await fetch("https://api.openai.com/v1/models", {
+          headers: { Authorization: `Bearer ${key}` },
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error(`OpenAI returned status ${res.status}`);
+        const data = (await res.json()) as { data?: Array<{ id: string }> };
+        return (data.data || []).map(m => m.id).filter(id => id.startsWith("gpt-") || id.startsWith("o1-") || id.startsWith("o3-"));
+      } else if (provider === "openrouter") {
+        const key = (apiKey || store.get("integrations.lightssOpenRouterApiKey") || process.env.OPENROUTER_API_KEY || "").trim();
+        const headers: Record<string, string> = {};
+        if (key) {
+          headers["Authorization"] = `Bearer ${key}`;
+        }
+        const res = await fetch("https://openrouter.ai/api/v1/models", {
+          headers,
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error(`OpenRouter returned status ${res.status}`);
+        const data = (await res.json()) as { data?: Array<{ id: string }> };
+        return (data.data || []).map(m => m.id);
+      }
+      return [];
+    } catch (err) {
+      console.error(`Error fetching models for ${provider}:`, err);
+      return [];
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  });
+
+  ipcMain.handle(
+    "ai:chat",
+    async (
+      event,
+      options: {
+        provider: string;
+        model: string;
+        systemPrompt?: string;
+        messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+      }
+    ) => {
+      if ((!settingsWindow || event.sender !== settingsWindow.webContents) && (!mainWindow || event.sender !== mainWindow.webContents)) {
+        throw new Error("Unauthorized");
+      }
+
+      const { provider, model, systemPrompt, messages } = options;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      try {
+        if (provider === "ollama") {
+          const url = ((store.get("integrations.lightssOllamaBaseUrl") as string) || "http://10.27.27.10:11434").trim();
+          let prompt = "";
+          if (systemPrompt) prompt += `[System Instruction]\n${systemPrompt}\n\n`;
+          for (const msg of messages) {
+            prompt += `${msg.role === "user" ? "User" : "Assistant"}: ${msg.content}\n`;
+          }
+          prompt += "Assistant: ";
+
+          const res = await fetch(`${url.replace(/\/+$/, "")}/api/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: model,
+              stream: false,
+              prompt: prompt
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`Ollama returned status ${res.status}`);
+          const data = (await res.json()) as { response: string };
+          return data.response;
+        } else if (provider === "gemini") {
+          const key = ((store.get("integrations.lightssGeminiApiKey") as string) || process.env.GEMINI_API_KEY || "").trim();
+          const base = ((store.get("integrations.lightssGeminiBaseUrl") as string) || "https://generativelanguage.googleapis.com").trim();
+          if (!key) throw new Error("Gemini API key missing");
+
+          const contents = [];
+          for (const msg of messages) {
+            if (msg.role === "system") continue;
+            contents.push({
+              role: msg.role === "user" ? "user" : "model",
+              parts: [{ text: msg.content }]
+            });
+          }
+
+          let modelSanitized = model;
+          if (modelSanitized.includes("gemini-3.1-pro")) {
+            modelSanitized = "gemini-2.5-pro";
+          } else if (modelSanitized.includes("gemini-2.5-flash-preview") || modelSanitized.includes("gemini-3.1-flash")) {
+            modelSanitized = "gemini-2.5-flash";
+          }
+          const modelName = modelSanitized.startsWith("models/") ? modelSanitized : `models/${modelSanitized}`;
+
+          let queryUrl = `${base.replace(/\/+$/, "")}/v1beta/${modelName}:generateContent?key=${key}`;
+          if (base.includes("generativelanguage.googleapis.com")) {
+            queryUrl = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${key}`;
+          }
+
+          const bodyPayload: { contents: unknown[]; systemInstruction?: { parts: Array<{ text: string }> } } = { contents };
+          if (systemPrompt) {
+            bodyPayload.systemInstruction = {
+              parts: [{ text: systemPrompt }]
+            };
+          }
+
+          const res = await fetch(queryUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bodyPayload),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) {
+            const errMsg = await res.text();
+            throw new Error(`Gemini returned status ${res.status}: ${errMsg}`);
+          }
+          const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+          return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        } else if (provider === "openai") {
+          const key = ((store.get("integrations.lightssOpenAIApiKey") as string) || process.env.OPENAI_API_KEY || "").trim();
+          if (!key) throw new Error("OpenAI API key missing");
+
+          const formattedMessages = [];
+          if (systemPrompt) {
+            formattedMessages.push({ role: "system", content: systemPrompt });
+          }
+          for (const msg of messages) {
+            formattedMessages.push({ role: msg.role, content: msg.content });
+          }
+
+          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${key}`
+            },
+            body: JSON.stringify({
+              model: model,
+              messages: formattedMessages
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`OpenAI returned status ${res.status}`);
+          const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+          return data.choices?.[0]?.message?.content || "";
+        } else if (provider === "openrouter") {
+          const key = ((store.get("integrations.lightssOpenRouterApiKey") as string) || process.env.OPENROUTER_API_KEY || "").trim();
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (key) {
+            headers["Authorization"] = `Bearer ${key}`;
+          }
+
+          const formattedMessages = [];
+          if (systemPrompt) {
+            formattedMessages.push({ role: "system", content: systemPrompt });
+          }
+          for (const msg of messages) {
+            formattedMessages.push({ role: msg.role, content: msg.content });
+          }
+
+          const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              model: model,
+              messages: formattedMessages
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`OpenRouter returned status ${res.status}`);
+          const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+          return data.choices?.[0]?.message?.content || "";
+        }
+
+        throw new Error(`Unsupported provider: ${provider}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.error("Failed to query AI chat:", err);
+        throw err;
+      }
+    }
+  );
 
   // Handle app ipc
   ipcMain.handle("app:getVersion", event => {

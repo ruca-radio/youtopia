@@ -1,19 +1,34 @@
 <script setup lang="ts">
+import { ref, watch } from "vue";
 import IconButton from "./IconButton.vue";
 import NowPlayingInfo from "./NowPlayingInfo.vue";
 import PlayerProgress from "./PlayerProgress.vue";
 import VuMeter from "./VuMeter.vue";
 import { VuMeterStyle, VuMeterTheme } from "~shared/store/schema";
 import { ShellActions, ShellTrack } from "./types";
+import { RendererLightssAiMessage } from "~shared/player";
 
-defineProps<{
+const props = defineProps<{
   actions: ShellActions;
   track: ShellTrack;
   vuMeterEnabled: boolean;
   audioData: number[];
   theme: VuMeterTheme;
   vuMeterStyle: VuMeterStyle;
+  aiLightshowMessage?: RendererLightssAiMessage | null;
 }>();
+
+const flashUiIframe = ref<HTMLIFrameElement | null>(null);
+
+watch(
+  () => props.audioData,
+  newBins => {
+    if (flashUiIframe.value && flashUiIframe.value.contentWindow) {
+      flashUiIframe.value.contentWindow.postMessage({ type: "audioBins", bins: newBins }, "*");
+    }
+  },
+  { deep: true }
+);
 </script>
 
 <template>
@@ -24,7 +39,16 @@ defineProps<{
       <PlayerProgress :progress="track.progress" />
     </div>
 
-    <VuMeter :enabled="vuMeterEnabled" :active="track.isPlaying" :audio-data="audioData" :theme="theme" :style="vuMeterStyle" variant="fullscreen" />
+    <!-- Scrap fusion for right now: always render standard VuMeter visualizer -->
+    <VuMeter
+      :enabled="vuMeterEnabled"
+      :active="track.isPlaying"
+      :audio-data="audioData"
+      :theme="theme"
+      :style="vuMeterStyle"
+      :ai-lightshow-message="aiLightshowMessage"
+      variant="fullscreen"
+    />
 
     <div class="transport">
       <IconButton icon="skip_previous" label="Previous" @click="actions.previous" />

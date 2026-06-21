@@ -35,7 +35,14 @@ defineProps<{
       <IconButton :icon="track.isPlaying ? 'pause' : 'play_arrow'" label="Play/Pause" prominent @click="actions.playPause" />
       <IconButton icon="skip_next" label="Next" @click="actions.next" />
     </div>
-    <VuMeter :enabled="vuMeterEnabled" :active="track.isPlaying" :audio-data="audioData" :theme="theme" :style="vuMeterStyle" />
+    <VuMeter
+      :enabled="vuMeterEnabled"
+      :active="track.isPlaying"
+      :audio-data="audioData"
+      :theme="theme"
+      :style="vuMeterStyle"
+      :ai-lightshow-message="aiLightshowMessage"
+    />
     <SystemStatusPill compact :message="aiLightshowMessage" :vu-status="vuStatus" :ai-status="aiStatus" :wled-status="wledStatus" :light-status="lightStatus" />
     <IconButton icon="open_in_full" label="Restore full window" @click="actions.restoreFromMiniPlayer" />
   </section>

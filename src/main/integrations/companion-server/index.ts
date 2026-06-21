@@ -57,6 +57,11 @@ export default class CompanionServer implements IIntegration {
     return storeKey || process.env.OPENAI_API_KEY?.trim() || null;
   }
 
+  private getGeminiApiKey(): string | null {
+    const storeKey = (this.store.get("integrations.lightssGeminiApiKey") as string | null)?.trim();
+    return storeKey || process.env.GEMINI_API_KEY?.trim() || null;
+  }
+
   private getOrCreateTvControlPin(): string {
     const existing = this.store.get("integrations.companionServerTvControlPin") as string | null;
     if (existing) return existing;
@@ -412,7 +417,50 @@ export default class CompanionServer implements IIntegration {
       reply.send({ ok: true, command });
     });
     this.fastifyServer.get("/tv", (_request, reply) => {
+      const distPath = getFlashUiDistPath();
+      const htmlPath = path.join(distPath, "index.html");
+      if (!fs.existsSync(htmlPath)) {
+        // Fallback to legacy info screen if flash-ui is missing
+        reply.type("text/html").send(getTvDisplayHtml());
+        return;
+      }
+      let html = fs.readFileSync(htmlPath, "utf8");
+      const apiKey = this.getGeminiApiKey() || "";
+      const scriptInject = `<script>window.GEMINI_API_KEY = ${JSON.stringify(apiKey)};</script>`;
+      html = html.replace("<head>", `<head>${scriptInject}`);
+      reply.type("text/html").send(html);
+    });
+    this.fastifyServer.get("/tv/legacy", (_request, reply) => {
       reply.type("text/html").send(getTvDisplayHtml());
+    });
+    this.fastifyServer.get("/tv/flash-ui", (_request, reply) => {
+      const distPath = getFlashUiDistPath();
+      const htmlPath = path.join(distPath, "index.html");
+      if (!fs.existsSync(htmlPath)) {
+        reply.code(503).send("Flash UI assets not found. Make sure they are built and located in assets/flash-ui-dist.");
+        return;
+      }
+      let html = fs.readFileSync(htmlPath, "utf8");
+      const apiKey = this.getGeminiApiKey() || "";
+      const scriptInject = `<script>window.GEMINI_API_KEY = ${JSON.stringify(apiKey)};</script>`;
+      html = html.replace("<head>", `<head>${scriptInject}`);
+      reply.type("text/html").send(html);
+    });
+    this.fastifyServer.get("/tv/flash-ui/assets/:filename", (request, reply) => {
+      const filename = (request.params as { filename: string }).filename;
+      if (/[^a-zA-Z0-9._-]/.test(filename)) {
+        reply.code(400).send("Invalid filename");
+        return;
+      }
+      const distPath = getFlashUiDistPath();
+      const filePath = path.join(distPath, "assets", filename);
+      if (!fs.existsSync(filePath)) {
+        reply.code(404).send("Not found");
+        return;
+      }
+      const ext = path.extname(filename);
+      const contentType = ext === ".css" ? "text/css" : ext === ".js" ? "application/javascript" : "application/octet-stream";
+      reply.type(contentType).send(fs.createReadStream(filePath));
     });
     this.fastifyServer.get("/tv/program-receiver", (_request, reply) => {
       reply.type("text/html").send(getTvReceiverHtml());
@@ -707,7 +755,18 @@ function getTvDisplayHtml(): string {
     .status-light.busy, .status-light.warn { background: #f59e0b; border-color: rgba(253,230,138,.82); box-shadow: 0 0 0 5px rgba(245,158,11,.12), 0 0 22px rgba(245,158,11,.38); }
     .status-light.bad { background: #ef4444; border-color: rgba(254,202,202,.82); box-shadow: 0 0 0 5px rgba(239,68,68,.13), 0 0 22px rgba(239,68,68,.42); }
 	    .meter-stage { position: relative; z-index: 1; min-height: 0; display: grid; align-self: stretch; overflow: hidden; box-sizing: border-box; padding-bottom: clamp(14px, 1.8vh, 24px); }
-    .visualizer { min-height: 0; height: 100%; display: flex; align-items: end; justify-content: center; gap: clamp(8px, 1vw, 18px); }
+    .visualizer {
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      gap: clamp(8px, 1vw, 18px);
+      transform: rotate(var(--vu-rotation, 0deg));
+      filter: hue-rotate(var(--vu-color-shift, 0deg));
+      transform-origin: center;
+      transition: transform 900ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 700ms ease;
+    }
     .bar { width: clamp(12px, 2vw, 34px); min-height: 8px; border-radius: 10px 10px 4px 4px; background: linear-gradient(to top, var(--vu-low), var(--vu-mid) 62%, var(--vu-high)); opacity: .95; will-change: height; }
     .bar.fallback { opacity: .62; background: linear-gradient(to top, #334155, #475569 62%, #64748b); }
     body[data-vu-style="classicLed"] .bar { height: 82% !important; background: linear-gradient(to top, var(--vu-low) 0%, var(--vu-low) 55%, var(--vu-mid) 55%, var(--vu-mid) 78%, var(--vu-high) 78%); box-shadow: inset 0 0 0 2px rgba(0,0,0,.35); }
@@ -715,6 +774,64 @@ function getTvDisplayHtml(): string {
     body[data-vu-style="spectrumLine"] .visualizer { align-items: center; gap: 3px; }
     body[data-vu-style="spectrumLine"] .bar { width: clamp(7px, .8vw, 14px); border-radius: 999px; }
     body[data-vu-style="albumGlow"] .bar { box-shadow: 0 0 18px var(--vu-high), 0 0 40px rgba(255,255,255,.12); }
+
+    body[data-vu-style="radialWave"] .visualizer {
+      position: relative;
+      width: clamp(240px, 32vh, 480px);
+      height: clamp(240px, 32vh, 480px);
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    body[data-vu-style="radialWave"] .bar {
+      position: absolute;
+      bottom: 50%;
+      left: calc(50% - clamp(3px, 0.4vw, 8px));
+      width: clamp(6px, 0.8vw, 16px);
+      transform-origin: bottom center;
+      transform: rotate(calc(var(--index) * (360deg / var(--total-bars)))) translateY(calc(-1 * clamp(40px, 6vh, 90px)));
+      height: calc(var(--level) * 0.45% + 6px) !important;
+      border-radius: 999px;
+      margin: 0;
+    }
+
+    body[data-vu-style="waveScope"] .visualizer {
+      align-items: center;
+      gap: clamp(2px, 0.3vw, 6px);
+    }
+    body[data-vu-style="waveScope"] .bar {
+      border-radius: 999px;
+      height: calc(var(--level) * 0.8% + 12px) !important;
+      background: linear-gradient(to bottom, var(--vu-high), var(--vu-mid) 50%, var(--vu-high));
+    }
+
+    body[data-vu-style="pixelBlocks"] .bar {
+      border-radius: 0;
+      background: 
+        repeating-linear-gradient(
+          to top,
+          transparent 0,
+          transparent 5px,
+          #000000 5px,
+          #000000 7px
+        ),
+        linear-gradient(to top, var(--vu-low), var(--vu-mid) 62%, var(--vu-high));
+    }
+
+    body[data-vu-style="floatingOrbs"] .visualizer {
+      align-items: end;
+      position: relative;
+    }
+    body[data-vu-style="floatingOrbs"] .bar {
+      width: clamp(12px, 2.2vw, 34px);
+      height: clamp(12px, 2.2vw, 34px) !important;
+      border-radius: 50%;
+      transform: translateY(calc(var(--level) * -0.75vh));
+      margin: 0;
+      box-shadow: 0 0 16px var(--vu-high);
+      transition: transform 100ms cubic-bezier(0.1, 0.8, 0.3, 1);
+    }
 	    .bottom { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(420px, min(62vw, 1160px)) minmax(0, 1fr); grid-template-rows: 8px minmax(138px, auto) auto; align-items: end; column-gap: clamp(18px, 3vw, 52px); row-gap: clamp(16px, 1.8vh, 24px); min-height: clamp(204px, 24vh, 282px); padding-top: 0; background: linear-gradient(to bottom, rgba(0,0,0,.97), rgba(0,0,0,.88)); }
 	    .progress { grid-column: 1 / -1; grid-row: 1; align-self: end; height: 8px; border-radius: 999px; background: rgba(255,255,255,.10); overflow: hidden; }
     .progress span { display: block; height: 100%; width: 0%; border-radius: inherit; background: var(--accent); transition: width 250ms linear; }
@@ -819,6 +936,7 @@ function getTvDisplayHtml(): string {
 	  <div id="albumArtBackdrop" class="album-art-backdrop" aria-hidden="true"></div>
 	  <canvas id="scene" aria-hidden="true"></canvas>
 	  <img id="albumArt" class="album-art" alt="" hidden />
+	  <iframe id="flashUiContainer" sandbox="allow-scripts allow-same-origin" style="position: fixed; inset: 0; width: 100vw; height: 100vh; border: none; z-index: 10; background: #000; display: none;"></iframe>
 	  <main>
 	    <section class="top">
 	      <div class="track-copy">
@@ -861,6 +979,10 @@ function getTvDisplayHtml(): string {
         <button id="djGptConnect" class="icon-button" type="button" aria-label="Start DJ-GPT voice" title="Start DJ-GPT voice">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
           <span class="sr-only">Start DJ-GPT voice</span>
+        </button>
+        <button id="flashUiOpen" class="icon-button" style="display: none;" type="button" aria-label="Flash UI" title="Flash UI" onclick="window.location.href='/tv/flash-ui'">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <span class="sr-only">Flash UI</span>
         </button>
         <span id="audioStatus" class="audio-status">TV audio idle</span>
       </div>
@@ -1162,7 +1284,7 @@ function getTvDisplayHtml(): string {
 	        src.visualizerStyle === "vuDots" || src.visualizerStyle === "spectrumLine" || src.visualizerStyle === "none" ? src.visualizerStyle : "vuBars";
 	      const fallbackVuStyle = state && state.appearance && typeof state.appearance.vuMeterStyle === "number" ? ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow"][state.appearance.vuMeterStyle] : "bars";
 	      const vuStyle =
-	        src.vuStyle === "classicLed" || src.vuStyle === "dotMatrix" || src.vuStyle === "spectrumLine" || src.vuStyle === "albumGlow" ? src.vuStyle : fallbackVuStyle;
+	        src.vuStyle === "classicLed" || src.vuStyle === "dotMatrix" || src.vuStyle === "spectrumLine" || src.vuStyle === "albumGlow" || src.vuStyle === "radialWave" || src.vuStyle === "waveScope" || src.vuStyle === "pixelBlocks" || src.vuStyle === "floatingOrbs" ? src.vuStyle : fallbackVuStyle;
 	      const motion = src.motion === "static" || src.motion === "medium" ? src.motion : "slow";
 	      const speed = motion === "static" ? 0.12 : motion === "medium" ? 0.72 : 0.38;
 	      const density = typeof src.density === "number" ? Math.max(0, Math.min(100, Math.round(src.density))) : 55;
@@ -1170,6 +1292,8 @@ function getTvDisplayHtml(): string {
 	      const logoMode = src.logoMode === "off" || src.logoMode === "prominent" ? src.logoMode : "small";
 	      const captionMode = src.captionMode === "off" || src.captionMode === "full" ? src.captionMode : "minimal";
 	      const albumArtMode = src.albumArtMode === "off" || src.albumArtMode === "hero" || src.albumArtMode === "ambient" ? src.albumArtMode : "corner";
+	      const vuRotation = typeof src.vuRotation === "number" ? Math.max(0, Math.min(360, Math.round(src.vuRotation))) : 0;
+	      const vuColorShift = typeof src.vuColorShift === "number" ? Math.max(0, Math.min(360, Math.round(src.vuColorShift))) : 0;
 	      const primary = safeHex(theme && theme.vuHighColor, "#ef4444");
 	      const secondary = safeHex(theme && theme.vuLowColor, "#22c55e");
 	      const accent = safeHex(theme && theme.vuMidColor, "#facc15");
@@ -1177,9 +1301,9 @@ function getTvDisplayHtml(): string {
 	      const seedStr =
 	        backgroundStyle + "|" + visualizerStyle + "|" + vuStyle + "|" + albumArtMode + "|" + motion + "|" + density + "|" + intensity + "|" + (state && state.player ? state.player.title + "|" + state.player.artist : "");
 	      const seed = xmur3(seedStr || stableStringify(src) || "default")();
-	      const baseConfig = { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed };
+	      const baseConfig = { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed, vuRotation, vuColorShift };
 	      const director = deriveTvDirector(baseConfig, state);
-	      return { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed, director };
+	      return { backgroundStyle, visualizerStyle, vuStyle, speed, density, intensity, logoMode, captionMode, albumArtMode, primary, secondary, accent, bg, seed, director, vuRotation, vuColorShift };
 	    }
 	    function normalizeTvDirector(input, visualConfig, state) {
 	      const src = input && typeof input === "object" ? input : {};
@@ -1256,6 +1380,8 @@ function getTvDisplayHtml(): string {
 	      document.body.dataset.tvObjectFamily = config.director.objectFamily;
 	      document.body.dataset.tvLayout = config.director.layout;
 	      document.body.dataset.tvFocus = config.director.focus;
+	      document.body.style.setProperty("--vu-rotation", (config.vuRotation || 0) + "deg");
+	      document.body.style.setProperty("--vu-color-shift", (config.vuColorShift || 0) + "deg");
 	    }
 	    function applyDisplayTheme(theme) {
 	      if (!theme) return;
@@ -1276,6 +1402,47 @@ function getTvDisplayHtml(): string {
 	      lastEventAt = Date.now();
 	      targetBins = Array.isArray(state.audio.bins) ? state.audio.bins.slice(0, bars.length) : [];
 	        const lightss = state.lightss || {};
+
+	        const flashUiHtml = ""; // Scrap fusion for right now
+	        const iframe = document.getElementById("flashUiContainer");
+	        if (iframe) {
+	          if (flashUiHtml) {
+	            if (iframe.dataset.loadedHtml !== flashUiHtml) {
+	              iframe.dataset.loadedHtml = flashUiHtml;
+	              iframe.srcdoc = flashUiHtml;
+	            }
+	            if (iframe.style.display !== "block") {
+	              iframe.style.display = "block";
+	            }
+	            if (iframe.contentWindow) {
+	              iframe.contentWindow.postMessage({
+	                type: "playerState",
+	                player: {
+	                  title: state.player.title || "",
+	                  artist: state.player.artist || "",
+	                  album: state.player.album || "",
+	                  albumArtUrl: state.player.albumArtUrl || "",
+	                  progressPercent: state.player.progressPercent || 0,
+	                  progressSeconds: state.player.progressSeconds || 0,
+	                  durationSeconds: state.player.durationSeconds || 0,
+	                  isPlaying: state.player.isPlaying || false,
+	                  volume: state.player.volume || 0
+	                },
+	                lightss: {
+	                  hostLine: lightss.hostLine || "",
+	                  tickerMessage: lightss.tickerMessage || "",
+	                  aiStatus: lightss.aiStatus || "",
+	                  wledStatus: lightss.wledStatus || "",
+	                  displayTheme: lightss.displayTheme || {}
+	                }
+	              }, "*");
+	            }
+	          } else {
+	            iframe.style.display = "none";
+	            iframe.removeAttribute("srcdoc");
+	            iframe.dataset.loadedHtml = "";
+	          }
+	        }
 	        const stateSignature = stableStringify({
 	          title: state.player.title,
 	          artist: state.player.artist,
@@ -1614,6 +1781,9 @@ function getTvDisplayHtml(): string {
 	        displayBins[index] += (target - displayBins[index]) * smoothing;
 	        const level = Math.max(4, Math.round((displayBins[index] / 255) * 100));
 	        bar.style.height = level + "%";
+	        bar.style.setProperty("--level", level);
+	        bar.style.setProperty("--index", index);
+	        bar.style.setProperty("--total-bars", bars.length);
 	        bar.classList.toggle("fallback", !live);
 	      });
 	      // Immersive canvas background: deterministic scene seeded from state.lightss.visualScene (if present).
@@ -1815,7 +1985,11 @@ function getTvDisplayHtml(): string {
 		}
 	      }
       }
-      requestAnimationFrame(render);
+       const flashUiIframe = document.getElementById("flashUiContainer");
+       if (flashUiIframe && flashUiIframe.style.display === "block" && flashUiIframe.contentWindow) {
+         flashUiIframe.contentWindow.postMessage({ type: "audioBins", bins: displayBins }, "*");
+       }
+       requestAnimationFrame(render);
 	    }
     function connectEvents() {
       if (!window.EventSource) {
@@ -1848,4 +2022,8 @@ function getProviderLogoPath(provider: string): string | null {
       : path.join(process.resourcesPath, "openai.png");
 
   return fs.existsSync(logoPath) ? logoPath : null;
+}
+
+function getFlashUiDistPath(): string {
+  return process.env.NODE_ENV === "development" ? path.join(app.getAppPath(), "src/assets/flash-ui-dist") : path.join(process.resourcesPath, "flash-ui-dist");
 }

@@ -6,6 +6,8 @@ import VuMeter from "./VuMeter.vue";
 import { VuMeterStyle, VuMeterTheme } from "~shared/store/schema";
 import { ShellActions, ShellTrack } from "./types";
 
+import { RendererLightssAiMessage } from "~shared/player";
+
 defineProps<{
   actions: ShellActions;
   track: ShellTrack;
@@ -13,6 +15,7 @@ defineProps<{
   audioData: number[];
   theme: VuMeterTheme;
   vuMeterStyle: VuMeterStyle;
+  aiLightshowMessage?: RendererLightssAiMessage | null;
 }>();
 </script>
 
@@ -21,7 +24,15 @@ defineProps<{
     <div class="hero">
       <div class="art"><img v-if="track.thumbnailUrl" :src="track.thumbnailUrl" alt="" /></div>
       <NowPlayingInfo :track="track" large />
-      <VuMeter :enabled="vuMeterEnabled" :active="track.isPlaying" :audio-data="audioData" :theme="theme" :style="vuMeterStyle" variant="expanded" />
+      <VuMeter
+        :enabled="vuMeterEnabled"
+        :active="track.isPlaying"
+        :audio-data="audioData"
+        :theme="theme"
+        :style="vuMeterStyle"
+        :ai-lightshow-message="aiLightshowMessage"
+        variant="expanded"
+      />
     </div>
     <div class="controls">
       <div class="quick-actions">

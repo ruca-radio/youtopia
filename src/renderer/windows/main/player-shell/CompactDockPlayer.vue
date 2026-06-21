@@ -6,6 +6,8 @@ import VuMeter from "./VuMeter.vue";
 import { VuMeterStyle, VuMeterTheme } from "~shared/store/schema";
 import { ShellActions, ShellTrack } from "./types";
 
+import { RendererLightssAiMessage } from "~shared/player";
+
 defineProps<{
   actions: ShellActions;
   track: ShellTrack;
@@ -13,6 +15,7 @@ defineProps<{
   audioData: number[];
   theme: VuMeterTheme;
   vuMeterStyle: VuMeterStyle;
+  aiLightshowMessage?: RendererLightssAiMessage | null;
 }>();
 </script>
 
@@ -30,7 +33,15 @@ defineProps<{
       <IconButton icon="favorite" label="Like" @click="actions.toggleLike" />
       <IconButton icon="queue_music" label="Queue" />
     </div>
-    <VuMeter :enabled="vuMeterEnabled" :active="track.isPlaying" :audio-data="audioData" :theme="theme" :style="vuMeterStyle" variant="compact" />
+    <VuMeter
+      :enabled="vuMeterEnabled"
+      :active="track.isPlaying"
+      :audio-data="audioData"
+      :theme="theme"
+      :style="vuMeterStyle"
+      :ai-lightshow-message="aiLightshowMessage"
+      variant="compact"
+    />
   </section>
 </template>
 

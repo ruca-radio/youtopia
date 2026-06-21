@@ -37,7 +37,16 @@ export type RendererLightssDisplayTheme = {
   vuHighColor: string;
 };
 
-export type RendererLightssVuStyle = "bars" | "classicLed" | "dotMatrix" | "spectrumLine" | "albumGlow";
+export type RendererLightssVuStyle =
+  | "bars"
+  | "classicLed"
+  | "dotMatrix"
+  | "spectrumLine"
+  | "albumGlow"
+  | "radialWave"
+  | "waveScope"
+  | "pixelBlocks"
+  | "floatingOrbs";
 
 export type RendererLightssVisualScene = {
   backgroundStyle: "solid" | "gradient";
@@ -49,6 +58,8 @@ export type RendererLightssVisualScene = {
   logoMode: "off" | "small" | "prominent";
   captionMode: "off" | "minimal" | "full";
   albumArtMode: "off" | "corner" | "hero" | "ambient";
+  vuRotation: number;
+  vuColorShift: number;
 };
 
 export type RendererLightssAiMessage = {
@@ -67,5 +78,6 @@ export type RendererLightssAiMessage = {
   tickerMessage?: string;
   hostLine?: string;
   planPhase?: "sketch" | "full";
+  flashUiHtml?: string;
   timestamp: number;
 };
