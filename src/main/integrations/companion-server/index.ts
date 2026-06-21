@@ -417,18 +417,7 @@ export default class CompanionServer implements IIntegration {
       reply.send({ ok: true, command });
     });
     this.fastifyServer.get("/tv", (_request, reply) => {
-      const distPath = getFlashUiDistPath();
-      const htmlPath = path.join(distPath, "index.html");
-      if (!fs.existsSync(htmlPath)) {
-        // Fallback to legacy info screen if flash-ui is missing
-        reply.type("text/html").send(getTvDisplayHtml());
-        return;
-      }
-      let html = fs.readFileSync(htmlPath, "utf8");
-      const apiKey = this.getGeminiApiKey() || "";
-      const scriptInject = `<script>window.GEMINI_API_KEY = ${JSON.stringify(apiKey)};</script>`;
-      html = html.replace("<head>", `<head>${scriptInject}`);
-      reply.type("text/html").send(html);
+      reply.type("text/html").send(getTvDisplayHtml());
     });
     this.fastifyServer.get("/tv/legacy", (_request, reply) => {
       reply.type("text/html").send(getTvDisplayHtml());
