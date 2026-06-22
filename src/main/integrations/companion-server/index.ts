@@ -57,11 +57,6 @@ export default class CompanionServer implements IIntegration {
     return storeKey || process.env.OPENAI_API_KEY?.trim() || null;
   }
 
-  private getGeminiApiKey(): string | null {
-    const storeKey = (this.store.get("integrations.lightssGeminiApiKey") as string | null)?.trim();
-    return storeKey || process.env.GEMINI_API_KEY?.trim() || null;
-  }
-
   private getOrCreateTvControlPin(): string {
     const existing = this.store.get("integrations.companionServerTvControlPin") as string | null;
     if (existing) return existing;
@@ -89,10 +84,10 @@ export default class CompanionServer implements IIntegration {
     const state = getTvDisplayState();
     const audioProfile = getLatestTvAudioProfile();
     const model =
-      (this.store.get<"integrations.lightssOpenAIRealtimeModel", string>("integrations.lightssOpenAIRealtimeModel") || DEFAULT_OPENAI_REALTIME_MODEL).trim() ||
+      ((this.store.get("integrations.lightssOpenAIRealtimeModel") as string | undefined) || DEFAULT_OPENAI_REALTIME_MODEL).trim() ||
       DEFAULT_OPENAI_REALTIME_MODEL;
     const voice =
-      (this.store.get<"integrations.lightssOpenAIRealtimeVoice", string>("integrations.lightssOpenAIRealtimeVoice") || DEFAULT_OPENAI_REALTIME_VOICE).trim() ||
+      ((this.store.get("integrations.lightssOpenAIRealtimeVoice") as string | undefined) || DEFAULT_OPENAI_REALTIME_VOICE).trim() ||
       DEFAULT_OPENAI_REALTIME_VOICE;
 
     return {
@@ -133,16 +128,14 @@ export default class CompanionServer implements IIntegration {
       global: false
     });
     this.fastifyServer.register(cors, {
-      origin: this.store.get<"integrations.companionServerCORSWildcardEnabled", boolean>("integrations.companionServerCORSWildcardEnabled", false) ? "*" : false
+      origin: (this.store.get("integrations.companionServerCORSWildcardEnabled") as boolean | undefined) ? "*" : false
     });
     this.fastifyServer.register(FastifyIO, {
       transports: ["websocket"],
       allowUpgrades: false,
       // While this is websocket only we still apply cors just in case
       cors: {
-        origin: this.store.get<"integrations.companionServerCORSWildcardEnabled", boolean>("integrations.companionServerCORSWildcardEnabled", false)
-          ? "*"
-          : false
+        origin: (this.store.get("integrations.companionServerCORSWildcardEnabled") as boolean | undefined) ? "*" : false
       }
     });
     this.fastifyServer.register(CompanionServerAPIv1, {
@@ -401,7 +394,7 @@ export default class CompanionServer implements IIntegration {
         return;
       }
 
-      const allowedTvCommands = new Set(["playPause", "previous", "next", "volumeUp", "volumeDown", "toggleLike"]);
+      const allowedTvCommands = new Set(["playPause", "previous", "next", "seekBackward", "seekForward", "volumeUp", "volumeDown", "toggleLike"]);
       const command = String((request.body as { command?: string } | null)?.command ?? "");
       if (!allowedTvCommands.has(command)) {
         reply.code(400).send({ ok: false, error: "Unsupported TV control command" });
@@ -413,7 +406,13 @@ export default class CompanionServer implements IIntegration {
         return;
       }
 
-      this.ytmView.webContents.send("remoteControl:execute", command);
+      if (command === "seekBackward") {
+        this.ytmView.webContents.send("remoteControl:execute", "seekRelative", -10);
+      } else if (command === "seekForward") {
+        this.ytmView.webContents.send("remoteControl:execute", "seekRelative", 10);
+      } else {
+        this.ytmView.webContents.send("remoteControl:execute", command);
+      }
       reply.send({ ok: true, command });
     });
     this.fastifyServer.get("/tv", (_request, reply) => {
@@ -426,13 +425,10 @@ export default class CompanionServer implements IIntegration {
       const distPath = getFlashUiDistPath();
       const htmlPath = path.join(distPath, "index.html");
       if (!fs.existsSync(htmlPath)) {
-        reply.code(503).send("Flash UI assets not found. Make sure they are built and located in assets/flash-ui-dist.");
+        reply.code(503).send("Fusion Studio assets not found. Make sure they are built and located in assets/flash-ui-dist.");
         return;
       }
-      let html = fs.readFileSync(htmlPath, "utf8");
-      const apiKey = this.getGeminiApiKey() || "";
-      const scriptInject = `<script>window.GEMINI_API_KEY = ${JSON.stringify(apiKey)};</script>`;
-      html = html.replace("<head>", `<head>${scriptInject}`);
+      const html = fs.readFileSync(htmlPath, "utf8");
       reply.type("text/html").send(html);
     });
     this.fastifyServer.get("/tv/flash-ui/assets/:filename", (request, reply) => {
@@ -457,6 +453,15 @@ export default class CompanionServer implements IIntegration {
     this.fastifyServer.get("/tv/provider-logo/:provider", (request, reply) => {
       const provider = String((request.params as { provider?: string }).provider ?? "").toLowerCase();
       const logoPath = getProviderLogoPath(provider);
+      if (!logoPath) {
+        reply.code(404).send();
+        return;
+      }
+
+      reply.type("image/png").send(fs.createReadStream(logoPath));
+    });
+    this.fastifyServer.get("/tv/logo.png", (_request, reply) => {
+      const logoPath = getYoutopiaLogoPath();
       if (!logoPath) {
         reply.code(404).send();
         return;
@@ -612,7 +617,7 @@ function getTvReceiverHtml(): string {
       }
     }
     window.youtopiaTvControl = function(command) {
-      const allowed = ["playPause", "previous", "next"];
+      const allowed = ["playPause", "previous", "next", "seekBackward", "seekForward"];
       if (allowed.indexOf(String(command)) !== -1) sendProgramControl(String(command));
     };
     function showControls() {
@@ -734,15 +739,19 @@ function getTvDisplayHtml(): string {
 	    }
 	    .top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: start; }
 	    .track-copy { min-width: 0; }
-	    .eyebrow { color: #aaa; font-size: clamp(12px, 1.1vw, 16px); text-transform: uppercase; letter-spacing: .12em; }
+	    .eyebrow { color: #aaa; font-size: clamp(12px, 1.1vw, 16px); text-transform: uppercase; letter-spacing: .12em; display: flex; align-items: center; gap: 10px; }
+	    .eyebrow-logo { height: clamp(20px, 2.4vw, 32px); width: auto; object-fit: contain; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.45)); }
 	    .eyebrow, h1, .artist, .message { text-shadow: 0 2px 16px rgba(0,0,0,.6); }
 	    h1 { margin: 8px 0 4px; max-width: 20ch; max-height: 1.92em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: clamp(38px, 5.1vw, 72px); line-height: .96; letter-spacing: 0; overflow-wrap: anywhere; }
 	    .artist { margin: 0; color: #cfcfcf; font-size: clamp(20px, 2.1vw, 30px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .status-lights { display: flex; justify-content: flex-end; align-items: center; gap: 14px; min-height: 32px; }
-    .status-light { width: 14px; height: 14px; border-radius: 999px; background: #3f3f46; border: 1px solid rgba(255,255,255,.24); box-shadow: 0 0 0 5px rgba(255,255,255,.04), 0 0 20px rgba(255,255,255,.08); }
+    .status-light { width: 14px; height: 14px; border-radius: 999px; background: #3f3f46; border: 1px solid rgba(255,255,255,.24); box-shadow: 0 0 0 5px rgba(255,255,255,.04), 0 0 20px rgba(255,255,255,.08); transition: background-color 900ms ease, border-color 900ms ease, box-shadow 900ms ease, transform 420ms ease; }
     .status-light.ok { background: #22c55e; border-color: rgba(134,239,172,.82); box-shadow: 0 0 0 5px rgba(34,197,94,.12), 0 0 22px rgba(34,197,94,.42); }
     .status-light.busy, .status-light.warn { background: #f59e0b; border-color: rgba(253,230,138,.82); box-shadow: 0 0 0 5px rgba(245,158,11,.12), 0 0 22px rgba(245,158,11,.38); }
     .status-light.bad { background: #ef4444; border-color: rgba(254,202,202,.82); box-shadow: 0 0 0 5px rgba(239,68,68,.13), 0 0 22px rgba(239,68,68,.42); }
+    .status-light[data-led-sample="true"] { background: var(--led-sample-color, #3f3f46); border-color: var(--led-sample-border, rgba(255,255,255,.34)); box-shadow: 0 0 0 5px var(--led-sample-halo, rgba(255,255,255,.06)), 0 0 24px var(--led-sample-glow, rgba(255,255,255,.16)); }
+    .led-sample-overlay { position: fixed; top: clamp(18px, 2.7vw, 44px); right: clamp(22px, 3vw, 48px); z-index: 32; display: flex; gap: 14px; align-items: center; pointer-events: none; opacity: 0; transform: translateY(-4px); transition: opacity 420ms ease, transform 420ms ease; }
+    body.fusion-active .led-sample-overlay { opacity: 1; transform: translateY(0); }
 	    .meter-stage { position: relative; z-index: 1; min-height: 0; display: grid; align-self: stretch; overflow: hidden; box-sizing: border-box; padding-bottom: clamp(14px, 1.8vh, 24px); }
     .visualizer {
       min-height: 0;
@@ -821,6 +830,48 @@ function getTvDisplayHtml(): string {
       box-shadow: 0 0 16px var(--vu-high);
       transition: transform 100ms cubic-bezier(0.1, 0.8, 0.3, 1);
     }
+
+    body[data-vu-style="fireFlame"] .bar {
+      width: clamp(10px, 1.8vw, 30px);
+      border-radius: 999px 999px 0 0;
+      background: linear-gradient(to top, #ef4444, #f97316 45%, #facc15 85%, #ffffff 100%);
+      box-shadow: 0 0 16px rgba(249, 115, 22, 0.72), inset 0 2px 5px rgba(255, 255, 255, 0.4);
+      animation: vu-flicker 1.4s ease-in-out infinite alternate;
+    }
+
+    body[data-vu-style="doubleSpectrum"] .visualizer {
+      align-items: center;
+    }
+    body[data-vu-style="doubleSpectrum"] .bar {
+      height: calc(var(--level) * 0.8% + 8px) !important;
+      background: linear-gradient(to bottom, var(--vu-high), var(--vu-mid) 40%, var(--vu-low) 50%, var(--vu-mid) 60%, var(--vu-high));
+      border-radius: 8px;
+    }
+
+    body[data-vu-style="neonPulse"] .bar {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1.5px solid var(--vu-high);
+      box-shadow: 0 0 14px var(--vu-high), inset 0 0 6px var(--vu-mid);
+      position: relative;
+    }
+    body[data-vu-style="neonPulse"] .bar::after {
+      content: "";
+      position: absolute;
+      top: 10%;
+      left: calc(50% - 1px);
+      width: 2px;
+      height: 80%;
+      background: #ffffff;
+      border-radius: 999px;
+      opacity: 0.85;
+      box-shadow: 0 0 8px #ffffff;
+    }
+
+    @keyframes vu-flicker {
+      0% { opacity: 0.88; filter: brightness(0.9) blur(0.2px); }
+      100% { opacity: 1; filter: brightness(1.1) blur(0.6px); }
+    }
+
 	    .bottom { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(420px, min(62vw, 1160px)) minmax(0, 1fr); grid-template-rows: 8px minmax(138px, auto) auto; align-items: end; column-gap: clamp(18px, 3vw, 52px); row-gap: clamp(16px, 1.8vh, 24px); min-height: clamp(204px, 24vh, 282px); padding-top: 0; background: linear-gradient(to bottom, rgba(0,0,0,.97), rgba(0,0,0,.88)); }
 	    .progress { grid-column: 1 / -1; grid-row: 1; align-self: end; height: 8px; border-radius: 999px; background: rgba(255,255,255,.10); overflow: hidden; }
     .progress span { display: block; height: 100%; width: 0%; border-radius: inherit; background: var(--accent); transition: width 250ms linear; }
@@ -899,6 +950,11 @@ function getTvDisplayHtml(): string {
     body[data-album-art-mode="ambient"] .album-art,
     body[data-album-art-mode="hero"] .album-art { opacity: .92; transform: translateY(0) scale(1); }
     body[data-album-art-mode="hero"] .album-art { width: clamp(170px, 22vw, 310px); top: 50%; transform: translateY(-50%) scale(1); opacity: .95; }
+    .fusion-frame { position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 10; display: none; background: #000000; }
+    body.fusion-active .fusion-frame { display: block; }
+    body.fusion-active main { z-index: 20; opacity: 0; pointer-events: none; transition: opacity 360ms ease; }
+    body.fusion-active.hud-visible main,
+    body.fusion-active .pin-gate.visible ~ main { opacity: 1; pointer-events: auto; }
     body[data-tv-layout="ambient"] .track-copy { opacity: .72; }
     body[data-tv-layout="artHero"] .track-copy { max-width: 58vw; }
     body[data-tv-layout="lowHud"] main { grid-template-rows: auto minmax(0, 1fr) auto; }
@@ -925,11 +981,16 @@ function getTvDisplayHtml(): string {
 	  <div id="albumArtBackdrop" class="album-art-backdrop" aria-hidden="true"></div>
 	  <canvas id="scene" aria-hidden="true"></canvas>
 	  <img id="albumArt" class="album-art" alt="" hidden />
-	  <iframe id="flashUiContainer" sandbox="allow-scripts allow-same-origin" style="position: fixed; inset: 0; width: 100vw; height: 100vh; border: none; z-index: 10; background: #000; display: none;"></iframe>
+	  <iframe id="flashUiContainer" class="fusion-frame" sandbox="allow-scripts" title="AI fusion visualizer"></iframe>
+      <div class="led-sample-overlay" aria-hidden="true">
+        <span id="ledSampleA" class="status-light" data-led-sample="true"></span>
+        <span id="ledSampleB" class="status-light" data-led-sample="true"></span>
+        <span id="ledSampleC" class="status-light" data-led-sample="true"></span>
+      </div>
 	  <main>
 	    <section class="top">
 	      <div class="track-copy">
-	        <div class="eyebrow">Youtopia TV</div>
+	        <div class="eyebrow"><img class="eyebrow-logo" src="/tv/logo.png" alt="" /><span>Youtopia TV</span></div>
         <h1 id="title">Loading</h1>
         <p class="artist" id="artist">Waiting for Youtopia</p>
       </div>
@@ -969,9 +1030,9 @@ function getTvDisplayHtml(): string {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
           <span class="sr-only">Start DJ-GPT voice</span>
         </button>
-        <button id="flashUiOpen" class="icon-button" style="display: none;" type="button" aria-label="Flash UI" title="Flash UI" onclick="window.location.href='/tv/flash-ui'">
+        <button id="flashUiOpen" class="icon-button" style="display: none;" type="button" aria-label="Fusion Studio" title="Fusion Studio" onclick="window.location.href='/tv/flash-ui'">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-          <span class="sr-only">Flash UI</span>
+          <span class="sr-only">Fusion Studio</span>
         </button>
         <span id="audioStatus" class="audio-status">TV audio idle</span>
       </div>
@@ -1226,6 +1287,25 @@ function getTvDisplayHtml(): string {
 	      const b = parseInt(safe.slice(4, 6), 16);
 	      return "rgba(" + r + "," + g + "," + b + "," + Math.max(0, Math.min(1, alpha)) + ")";
 	    }
+	    function setLedSampleDot(element, color) {
+	      if (!element) return;
+	      const sampleColor = safeHex(color, "#3f3f46");
+	      element.dataset.ledSample = "true";
+	      element.style.setProperty("--led-sample-color", sampleColor);
+	      element.style.setProperty("--led-sample-border", hexToRgba(sampleColor, 0.86));
+	      element.style.setProperty("--led-sample-halo", hexToRgba(sampleColor, 0.14));
+	      element.style.setProperty("--led-sample-glow", hexToRgba(sampleColor, 0.48));
+	    }
+	    function applyLedSample(theme) {
+	      const colors = [
+	        safeHex(theme && theme.vuLowColor, "#22c55e"),
+	        safeHex(theme && theme.vuMidColor, "#facc15"),
+	        safeHex(theme && theme.vuHighColor, "#ef4444")
+	      ];
+	      ["vu", "ai", "lights", "ledSampleA", "ledSampleB", "ledSampleC"].forEach((id, index) => {
+	        setLedSampleDot(document.getElementById(id), colors[index % colors.length]);
+	      });
+	    }
 	    function clamp01(value) {
 	      return Math.min(1, Math.max(0, value));
 	    }
@@ -1265,15 +1345,83 @@ function getTvDisplayHtml(): string {
 	      }
 	      return JSON.stringify(String(value));
 	    }
+	    function sanitizeFusionHtml(html) {
+	      if (typeof html !== "string") return "";
+	      let safe = html.trim();
+	      if (!safe) return "";
+	      safe = safe.slice(0, 180000);
+	      safe = safe.replace(/<script\\b[^>]*\\bsrc\\s*=\\s*["'][^"']*["'][^>]*>\\s*<\\/script>/gi, "");
+	      safe = safe.replace(/<(iframe|object|embed|base|form)\\b[\\s\\S]*?<\\/\\1>/gi, "");
+	      safe = safe.replace(/<(iframe|object|embed|base|form)\\b[^>]*\\/?>/gi, "");
+	      safe = safe.replace(/<meta\\b[^>]*http-equiv\\s*=\\s*["']?refresh["']?[^>]*>/gi, "");
+	      safe = safe.replace(/\\s+on[a-z]+\\s*=\\s*("[^"]*"|'[^']*'|[^\\s>]+)/gi, "");
+	      safe = safe.replace(/javascript\\s*:/gi, "");
+	      return safe;
+	    }
+	    function applyFusionHtml(flashUiHtml) {
+	      const iframe = document.getElementById("flashUiContainer");
+	      if (!iframe) return false;
+	      if (!flashUiHtml) {
+	        iframe.style.display = "none";
+	        iframe.removeAttribute("srcdoc");
+	        iframe.dataset.loadedHtml = "";
+	        body.classList.remove("fusion-active");
+	        return false;
+	      }
+	      if (iframe.dataset.loadedHtml !== flashUiHtml) {
+	        iframe.dataset.loadedHtml = flashUiHtml;
+	        iframe.srcdoc = flashUiHtml;
+	      }
+	      iframe.style.display = "block";
+	      body.classList.add("fusion-active");
+	      return true;
+	    }
+	    function postFusionPlayerState(state, lightss) {
+	      const iframe = document.getElementById("flashUiContainer");
+	      if (!iframe || iframe.style.display !== "block" || !iframe.contentWindow || !state || !state.player) return;
+	      iframe.contentWindow.postMessage({
+	        type: "playerState",
+	        player: {
+	          title: state.player.title || "",
+	          artist: state.player.artist || "",
+	          album: state.player.album || "",
+	          albumArtUrl: state.player.albumArtUrl || "",
+	          progressPercent: state.player.progressPercent || 0,
+	          progressSeconds: state.player.progressSeconds || 0,
+	          durationSeconds: state.player.durationSeconds || 0,
+	          isPlaying: state.player.isPlaying || false,
+	          volume: state.player.volume || 0
+	        },
+	        lightss: {
+	          hostLine: lightss.hostLine || "",
+	          tickerMessage: lightss.tickerMessage || "",
+	          aiStatus: lightss.aiStatus || "",
+	          wledStatus: lightss.wledStatus || "",
+	          displayTheme: lightss.displayTheme || {},
+	          visualScene: lightss.visualScene || {}
+	        }
+	      }, "*");
+	    }
+	    function handleFusionControlMessage(event) {
+	      const iframe = document.getElementById("flashUiContainer");
+	      if (!iframe || event.source !== iframe.contentWindow) return;
+	      const data = event.data || {};
+	      if (!data || data.type !== "youtopiaControl") return;
+	      const command = String(data.command || "");
+	      const allowed = ["playPause", "previous", "next", "seekBackward", "seekForward", "volumeDown", "volumeUp", "toggleLike"];
+	      if (allowed.indexOf(command) === -1) return;
+	      registerTvInputActivity("fusion");
+	      sendTvControl(command);
+	    }
 	    function normalizeVisualScene(visualScene, theme, state) {
 	      // Lightss emits a strict visualScene, but keep this permissive for stale plans.
 	      const src = visualScene && typeof visualScene === "object" ? visualScene : {};
 	      const backgroundStyle = src.backgroundStyle === "gradient" ? "gradient" : "solid";
 	      const visualizerStyle =
 	        src.visualizerStyle === "vuDots" || src.visualizerStyle === "spectrumLine" || src.visualizerStyle === "none" ? src.visualizerStyle : "vuBars";
-	      const fallbackVuStyle = state && state.appearance && typeof state.appearance.vuMeterStyle === "number" ? ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow"][state.appearance.vuMeterStyle] : "bars";
+	      const fallbackVuStyle = state && state.appearance && typeof state.appearance.vuMeterStyle === "number" ? ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow", "radialWave", "waveScope", "pixelBlocks", "floatingOrbs", "fireFlame", "doubleSpectrum", "neonPulse"][state.appearance.vuMeterStyle] : "bars";
 	      const vuStyle =
-	        src.vuStyle === "classicLed" || src.vuStyle === "dotMatrix" || src.vuStyle === "spectrumLine" || src.vuStyle === "albumGlow" || src.vuStyle === "radialWave" || src.vuStyle === "waveScope" || src.vuStyle === "pixelBlocks" || src.vuStyle === "floatingOrbs" ? src.vuStyle : fallbackVuStyle;
+	        src.vuStyle === "classicLed" || src.vuStyle === "dotMatrix" || src.vuStyle === "spectrumLine" || src.vuStyle === "albumGlow" || src.vuStyle === "radialWave" || src.vuStyle === "waveScope" || src.vuStyle === "pixelBlocks" || src.vuStyle === "floatingOrbs" || src.vuStyle === "fireFlame" || src.vuStyle === "doubleSpectrum" || src.vuStyle === "neonPulse" ? src.vuStyle : fallbackVuStyle;
 	      const motion = src.motion === "static" || src.motion === "medium" ? src.motion : "slow";
 	      const speed = motion === "static" ? 0.12 : motion === "medium" ? 0.72 : 0.38;
 	      const density = typeof src.density === "number" ? Math.max(0, Math.min(100, Math.round(src.density))) : 55;
@@ -1385,6 +1533,7 @@ function getTvDisplayHtml(): string {
       root.style.setProperty("--vu-low", safeHex(theme.vuLowColor, "#22c55e"));
       root.style.setProperty("--vu-mid", safeHex(theme.vuMidColor, "#facc15"));
       root.style.setProperty("--vu-high", safeHex(theme.vuHighColor, "#ef4444"));
+      applyLedSample(theme);
     }
 	    function applyState(state) {
 	      latestState = state;
@@ -1392,46 +1541,9 @@ function getTvDisplayHtml(): string {
 	      targetBins = Array.isArray(state.audio.bins) ? state.audio.bins.slice(0, bars.length) : [];
 	        const lightss = state.lightss || {};
 
-	        const flashUiHtml = ""; // Scrap fusion for right now
-	        const iframe = document.getElementById("flashUiContainer");
-	        if (iframe) {
-	          if (flashUiHtml) {
-	            if (iframe.dataset.loadedHtml !== flashUiHtml) {
-	              iframe.dataset.loadedHtml = flashUiHtml;
-	              iframe.srcdoc = flashUiHtml;
-	            }
-	            if (iframe.style.display !== "block") {
-	              iframe.style.display = "block";
-	            }
-	            if (iframe.contentWindow) {
-	              iframe.contentWindow.postMessage({
-	                type: "playerState",
-	                player: {
-	                  title: state.player.title || "",
-	                  artist: state.player.artist || "",
-	                  album: state.player.album || "",
-	                  albumArtUrl: state.player.albumArtUrl || "",
-	                  progressPercent: state.player.progressPercent || 0,
-	                  progressSeconds: state.player.progressSeconds || 0,
-	                  durationSeconds: state.player.durationSeconds || 0,
-	                  isPlaying: state.player.isPlaying || false,
-	                  volume: state.player.volume || 0
-	                },
-	                lightss: {
-	                  hostLine: lightss.hostLine || "",
-	                  tickerMessage: lightss.tickerMessage || "",
-	                  aiStatus: lightss.aiStatus || "",
-	                  wledStatus: lightss.wledStatus || "",
-	                  displayTheme: lightss.displayTheme || {}
-	                }
-	              }, "*");
-	            }
-	          } else {
-	            iframe.style.display = "none";
-	            iframe.removeAttribute("srcdoc");
-	            iframe.dataset.loadedHtml = "";
-	          }
-	        }
+	        const flashUiHtml = sanitizeFusionHtml(lightss.flashUiHtml || "");
+	        applyFusionHtml(flashUiHtml);
+	        postFusionPlayerState(state, lightss);
 	        const stateSignature = stableStringify({
 	          title: state.player.title,
 	          artist: state.player.artist,
@@ -1727,6 +1839,7 @@ function getTvDisplayHtml(): string {
 	    });
 	    window.addEventListener("pagehide", disconnectTvAudio);
 	    window.addEventListener("beforeunload", disconnectTvAudio);
+	    window.addEventListener("message", handleFusionControlMessage);
 	    document.querySelectorAll("[data-command]").forEach(button => {
 	      button.addEventListener("click", () => sendTvControl(button.dataset.command));
 	    });
@@ -1745,7 +1858,7 @@ function getTvDisplayHtml(): string {
 	    // they reuse the PIN-aware control path (header + PIN gate) instead of issuing
 	    // unauthenticated POSTs that the PIN-protected endpoint now rejects.
 	    window.youtopiaTvControl = function (command) {
-	      const allowed = ["playPause", "previous", "next", "volumeUp", "volumeDown", "toggleLike"];
+	      const allowed = ["playPause", "previous", "next", "seekBackward", "seekForward", "volumeUp", "volumeDown", "toggleLike"];
 	      registerTvInputActivity("remote");
 	      if (allowed.indexOf(String(command)) !== -1) sendTvControl(String(command));
 	    };
@@ -2009,6 +2122,13 @@ function getProviderLogoPath(provider: string): string | null {
     process.env.NODE_ENV === "development"
       ? path.join(app.getAppPath(), "src/assets/provider-logos/openai.png")
       : path.join(process.resourcesPath, "openai.png");
+
+  return fs.existsSync(logoPath) ? logoPath : null;
+}
+
+function getYoutopiaLogoPath(): string | null {
+  const logoPath =
+    process.env.NODE_ENV === "development" ? path.join(app.getAppPath(), "src/assets/icons/ytmd.png") : path.join(process.resourcesPath, "ytmd.png");
 
   return fs.existsSync(logoPath) ? logoPath : null;
 }

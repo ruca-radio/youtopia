@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch, computed } from "vue";
 import KeybindInput from "../../components/KeybindInput.vue";
 import YTMDSetting from "../../components/YTMDSetting.vue";
 import {
@@ -70,6 +70,7 @@ const continueWhereYouLeftOffPaused = ref<boolean>(playback.continueWhereYouLeft
 const enableSpeakerFill = ref<boolean>(playback.enableSpeakerFill);
 const progressInTaskbar = ref<boolean>(playback.progressInTaskbar);
 const ratioVolume = ref<boolean>(playback.ratioVolume);
+const excludeAiMusicFromPlaylists = ref<boolean>(playback.excludeAiMusicFromPlaylists ?? false);
 
 const companionServerEnabled = ref<boolean>(integrations.companionServerEnabled);
 const companionServerAuthTokens = ref<AuthToken[]>(
@@ -119,6 +120,134 @@ const lightssSketchModel = ref<string>(integrations.lightssSketchModel ?? "gemin
 const lightssVisionEnabled = ref<boolean>(integrations.lightssVisionEnabled ?? true);
 const lightssStepIntervalSecs = ref<number>((integrations.lightssStepIntervalMs ?? 7000) / 1000);
 
+const ollamaModels = ref<string[]>([]);
+const geminiModels = ref<string[]>([]);
+const openaiModels = ref<string[]>([]);
+const openrouterModels = ref<string[]>([]);
+
+function getFallbackModels(provider: string): string[] {
+  const fallbacks: Record<string, string[]> = {
+    ollama: ["kimi-k2.7-code:cloud", "llama3", "mistral", "gemma2", "phi3"],
+    gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
+    openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    openrouter: ["google/gemini-2.5-flash", "google/gemini-2.5-pro", "openai/gpt-4o", "meta-llama/llama-3-70b-instruct"]
+  };
+  return fallbacks[provider] || [];
+}
+
+async function loadModels(provider: string) {
+  try {
+    let baseUrl = "";
+    let apiKey = "";
+    if (provider === "ollama") {
+      baseUrl = lightssOllamaBaseUrl.value;
+    } else if (provider === "gemini") {
+      baseUrl = lightssGeminiBaseUrl.value;
+      apiKey = lightssGeminiApiKey.value;
+    } else if (provider === "openai") {
+      apiKey = lightssOpenAIApiKey.value;
+    } else if (provider === "openrouter") {
+      apiKey = lightssOpenRouterApiKey.value;
+    }
+
+    if (window.ytmd.ai && typeof window.ytmd.ai.fetchModels === "function") {
+      const models = await window.ytmd.ai.fetchModels(provider, baseUrl, apiKey);
+      if (models && models.length > 0) {
+        if (provider === "ollama") ollamaModels.value = models;
+        else if (provider === "gemini") geminiModels.value = models;
+        else if (provider === "openai") openaiModels.value = models;
+        else if (provider === "openrouter") openrouterModels.value = models;
+        return;
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to load models for ${provider}:`, err);
+  }
+  const fb = getFallbackModels(provider);
+  if (provider === "ollama") ollamaModels.value = fb;
+  else if (provider === "gemini") geminiModels.value = fb;
+  else if (provider === "openai") openaiModels.value = fb;
+  else if (provider === "openrouter") openrouterModels.value = fb;
+}
+
+const ollamaOptionsMap = computed(() => {
+  const map: Record<string, string> = {};
+  ollamaModels.value.forEach(m => {
+    map[m] = m;
+  });
+  return map;
+});
+const geminiOptionsMap = computed(() => {
+  const map: Record<string, string> = {};
+  geminiModels.value.forEach(m => {
+    map[m] = m;
+  });
+  return map;
+});
+const openaiOptionsMap = computed(() => {
+  const map: Record<string, string> = {};
+  openaiModels.value.forEach(m => {
+    map[m] = m;
+  });
+  return map;
+});
+const openrouterOptionsMap = computed(() => {
+  const map: Record<string, string> = {};
+  openrouterModels.value.forEach(m => {
+    map[m] = m;
+  });
+  return map;
+});
+
+function getOptionsMapForProvider(provider: LightssAiProvider) {
+  if (provider === LightssAiProvider.Ollama) return ollamaOptionsMap.value;
+  if (provider === LightssAiProvider.Gemini) return geminiOptionsMap.value;
+  if (provider === LightssAiProvider.OpenAI) return openaiOptionsMap.value;
+  if (provider === LightssAiProvider.OpenRouter) return openrouterOptionsMap.value;
+  return {};
+}
+
+function getFirstModelForProvider(provider: LightssAiProvider): string {
+  const map = getOptionsMapForProvider(provider);
+  const keys = Object.keys(map);
+  return keys[0] || getFallbackModels(provider as string)[0] || "";
+}
+
+function wledProviderChanged() {
+  lightssWledModel.value = getFirstModelForProvider(lightssWledProvider.value);
+  settingsChanged();
+}
+function canvasProviderChanged() {
+  lightssCanvasModel.value = getFirstModelForProvider(lightssCanvasProvider.value);
+  settingsChanged();
+}
+function hostProviderChanged() {
+  lightssHostModel.value = getFirstModelForProvider(lightssHostProvider.value);
+  settingsChanged();
+}
+function analystProviderChanged() {
+  lightssAnalystModel.value = getFirstModelForProvider(lightssAnalystProvider.value);
+  settingsChanged();
+}
+function sketchProviderChanged() {
+  lightssSketchModel.value = getFirstModelForProvider(lightssSketchProvider.value);
+  settingsChanged();
+}
+function mainProviderChanged() {
+  settingsChanged();
+}
+
+// Initial fetch
+loadModels("ollama");
+loadModels("gemini");
+loadModels("openai");
+loadModels("openrouter");
+
+watch(lightssOllamaBaseUrl, () => loadModels("ollama"));
+watch([lightssGeminiBaseUrl, lightssGeminiApiKey], () => loadModels("gemini"));
+watch(lightssOpenAIApiKey, () => loadModels("openai"));
+watch(lightssOpenRouterApiKey, () => loadModels("openrouter"));
+
 const audioCompressorEnabled = ref<boolean>(integrations.audioCompressorEnabled ?? true);
 const audioCompressorThreshold = ref<number>(integrations.audioCompressorThreshold ?? -24);
 const audioCompressorRatio = ref<number>(integrations.audioCompressorRatio ?? 12);
@@ -161,6 +290,7 @@ store.onDidAnyChange(async newState => {
   enableSpeakerFill.value = newState.playback.enableSpeakerFill;
   progressInTaskbar.value = newState.playback.progressInTaskbar;
   ratioVolume.value = newState.playback.ratioVolume;
+  excludeAiMusicFromPlaylists.value = newState.playback.excludeAiMusicFromPlaylists ?? false;
 
   companionServerEnabled.value = newState.integrations.companionServerEnabled;
   companionServerAuthTokens.value = safeStorageAvailable.value
@@ -286,6 +416,7 @@ async function settingsChanged() {
   store.set("playback.progressInTaskbar", progressInTaskbar.value);
   store.set("playback.enableSpeakerFill", enableSpeakerFill.value);
   store.set("playback.ratioVolume", ratioVolume.value);
+  store.set("playback.excludeAiMusicFromPlaylists", excludeAiMusicFromPlaylists.value);
 
   store.set("integrations.companionServerEnabled", companionServerEnabled.value);
   store.set("integrations.companionServerCORSWildcardEnabled", companionServerCORSWildcardEnabled.value);
@@ -577,6 +708,10 @@ window.ytmd.handleUpdateDownloaded(() => {
   <div class="settings-container">
     <div class="content-container">
       <ul class="sidebar">
+        <div class="sidebar-brand">
+          <img :src="logo" class="sidebar-brand-logo" />
+          <span class="sidebar-brand-name">YouTopia</span>
+        </div>
         <li :class="{ active: currentTab === 1 }" @click="changeTab(1)"><span class="material-symbols-outlined">settings_applications</span>General</li>
         <li :class="{ active: currentTab === 2 }" @click="changeTab(2)"><span class="material-symbols-outlined">brush</span>Appearance</li>
         <li :class="{ active: currentTab === 3 }" @click="changeTab(3)"><span class="material-symbols-outlined">music_note</span>Playback</li>
@@ -678,7 +813,14 @@ window.ytmd.handleUpdateDownloaded(() => {
               [VuMeterStyle.ClassicLed]: 'Classic LED',
               [VuMeterStyle.DotMatrix]: 'Dot matrix',
               [VuMeterStyle.SpectrumLine]: 'Spectrum line',
-              [VuMeterStyle.AlbumGlow]: 'Album glow'
+              [VuMeterStyle.AlbumGlow]: 'Album glow',
+              [VuMeterStyle.RadialWave]: 'Radial wave',
+              [VuMeterStyle.WaveScope]: 'Wave scope',
+              [VuMeterStyle.PixelBlocks]: 'Pixel blocks',
+              [VuMeterStyle.FloatingOrbs]: 'Floating orbs',
+              [VuMeterStyle.FireFlame]: 'Fire flame',
+              [VuMeterStyle.DoubleSpectrum]: 'Double spectrum',
+              [VuMeterStyle.NeonPulse]: 'Neon pulse'
             }"
             type="select"
             name="VU meter style"
@@ -722,6 +864,7 @@ window.ytmd.handleUpdateDownloaded(() => {
           <YTMDSetting v-model="progressInTaskbar" type="checkbox" name="Show track progress on taskbar" @change="settingsChanged" />
           <YTMDSetting v-model="enableSpeakerFill" type="checkbox" restart-required name="Enable speaker fill" @change="settingChangedRequiresRestart" />
           <YTMDSetting v-model="ratioVolume" type="checkbox" name="Ratio volume" @change="settingsChanged" />
+          <YTMDSetting v-model="excludeAiMusicFromPlaylists" type="checkbox" name="Exclude AI-generated music from playlists" @change="settingsChanged" />
         </div>
 
         <div v-if="currentTab === 4" class="integrations-tab">
@@ -795,7 +938,7 @@ window.ytmd.handleUpdateDownloaded(() => {
               </tbody>
             </table>
             <div v-if="companionServerAuthTokens.length === 0" class="no-authorized-companions">
-              <td>No authorized companions</td>
+              <span>No authorized companions</span>
             </div>
           </YTMDSetting>
           <YTMDSetting v-model="discordPresenceEnabled" type="checkbox" name="Discord rich presence" @change="settingsChanged" />
@@ -955,119 +1098,124 @@ window.ytmd.handleUpdateDownloaded(() => {
                 name="Lightss AI provider"
                 description="Choose which AI plans the WLED lightshow"
                 indented
-                @change="settingsChanged"
+                @change="mainProviderChanged"
               />
 
-              <!-- Ollama Provider Settings -->
-              <div v-if="lightssAiProvider === LightssAiProvider.Ollama">
-                <YTMDSetting
-                  v-model="lightssOllamaBaseUrl"
-                  type="text"
-                  name="Ollama base URL"
-                  description="Base URL for the Ollama-compatible planner"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssOllamaModel"
-                  type="text"
-                  name="Ollama model"
-                  description="Model used to plan WLED scenes"
-                  indented
-                  @change="settingsChanged"
-                />
-              </div>
+              <!-- Centralized AI Provider Configuration -->
+              <div class="providers-setup-container indented">
+                <div class="prompt-header">
+                  <h4>AI Connections &amp; Provider Defaults</h4>
+                  <p class="prompt-desc">Centralized setup for base URLs, API keys, and default global models.</p>
+                </div>
 
-              <!-- OpenRouter Provider Settings -->
-              <div v-if="lightssAiProvider === LightssAiProvider.OpenRouter">
-                <YTMDSetting
-                  v-model="lightssOpenRouterModel"
-                  type="text"
-                  name="OpenRouter model"
-                  description="Model used to plan WLED scenes through OpenRouter"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssOpenRouterApiKey"
-                  type="text"
-                  name="OpenRouter API key"
-                  description="Optional; otherwise OPENROUTER_API_KEY from the app environment is used"
-                  indented
-                  @change="settingsChanged"
-                />
-              </div>
+                <!-- Ollama Setup -->
+                <div class="provider-sub-block">
+                  <div class="provider-header">
+                    <h5>Ollama</h5>
+                    <span class="provider-badge">Local / Self-hosted</span>
+                  </div>
+                  <YTMDSetting
+                    v-model="lightssOllamaBaseUrl"
+                    type="text"
+                    name="Base URL"
+                    description="Ollama endpoint URL (e.g. http://127.0.0.1:11434)"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssOllamaModel"
+                    :options-map="ollamaOptionsMap"
+                    type="select"
+                    name="Default Model"
+                    description="Ollama model for general planning"
+                    @change="settingsChanged"
+                  />
+                </div>
 
-              <!-- OpenAI Provider Settings -->
-              <div v-if="lightssAiProvider === LightssAiProvider.OpenAI">
-                <YTMDSetting
-                  v-model="lightssOpenAIModel"
-                  type="text"
-                  name="OpenAI model"
-                  description="Model used to plan WLED scenes"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssOpenAIRealtimeModel"
-                  type="text"
-                  name="DJ-GPT realtime model"
-                  description="Realtime voice model for the TV DJ session"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssOpenAIRealtimeVoice"
-                  type="text"
-                  name="DJ-GPT voice"
-                  description="Realtime voice used by the TV DJ session"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssOpenAIAudioDirectorModel"
-                  type="text"
-                  name="Audio director model"
-                  description="Model used for fades, sets, search planning, and playlist direction"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssOpenAIApiKey"
-                  type="text"
-                  name="OpenAI API key"
-                  description="Optional; otherwise OPENAI_API_KEY from the app environment is used"
-                  indented
-                  @change="settingsChanged"
-                />
-              </div>
+                <!-- Gemini Setup -->
+                <div class="provider-sub-block">
+                  <div class="provider-header">
+                    <h5>Gemini</h5>
+                    <span class="provider-badge">Google AI Studio</span>
+                  </div>
+                  <YTMDSetting
+                    v-model="lightssGeminiBaseUrl"
+                    type="text"
+                    name="Base URL"
+                    description="Gemini API base URL (defaults to google endpoint)"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting v-model="lightssGeminiApiKey" type="text" name="API Key" description="Required for Gemini API calls" @change="settingsChanged" />
+                  <YTMDSetting
+                    v-model="lightssGeminiModel"
+                    :options-map="geminiOptionsMap"
+                    type="select"
+                    name="Default Model"
+                    description="Gemini model for general planning"
+                    @change="settingsChanged"
+                  />
+                </div>
 
-              <!-- Gemini Provider Settings -->
-              <div v-if="lightssAiProvider === LightssAiProvider.Gemini">
-                <YTMDSetting
-                  v-model="lightssGeminiModel"
-                  type="text"
-                  name="Gemini model"
-                  description="Model used to plan WLED scenes"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssGeminiBaseUrl"
-                  type="text"
-                  name="Gemini base URL"
-                  description="Base URL for Gemini API endpoint (defaults to Google)"
-                  indented
-                  @change="settingsChanged"
-                />
-                <YTMDSetting
-                  v-model="lightssGeminiApiKey"
-                  type="text"
-                  name="Gemini API key"
-                  description="Optional; otherwise GEMINI_API_KEY from the app environment is used"
-                  indented
-                  @change="settingsChanged"
-                />
+                <!-- OpenAI Setup -->
+                <div class="provider-sub-block">
+                  <div class="provider-header">
+                    <h5>OpenAI</h5>
+                    <span class="provider-badge">Official API</span>
+                  </div>
+                  <YTMDSetting v-model="lightssOpenAIApiKey" type="text" name="API Key" description="Required for OpenAI API calls" @change="settingsChanged" />
+                  <YTMDSetting
+                    v-model="lightssOpenAIModel"
+                    :options-map="openaiOptionsMap"
+                    type="select"
+                    name="Default Model"
+                    description="OpenAI model for general planning"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssOpenAIRealtimeModel"
+                    type="text"
+                    name="DJ-GPT Realtime Model"
+                    description="Realtime voice model for TV DJ session"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssOpenAIRealtimeVoice"
+                    type="text"
+                    name="DJ-GPT Realtime Voice"
+                    description="Voice for TV DJ session"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssOpenAIAudioDirectorModel"
+                    :options-map="openaiOptionsMap"
+                    type="select"
+                    name="Audio Director Model"
+                    description="Model for fades, search, and audio direction"
+                    @change="settingsChanged"
+                  />
+                </div>
+
+                <!-- OpenRouter Setup -->
+                <div class="provider-sub-block">
+                  <div class="provider-header">
+                    <h5>OpenRouter</h5>
+                    <span class="provider-badge">Unified API</span>
+                  </div>
+                  <YTMDSetting
+                    v-model="lightssOpenRouterApiKey"
+                    type="text"
+                    name="API Key"
+                    description="Required for OpenRouter API calls"
+                    @change="settingsChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssOpenRouterModel"
+                    :options-map="openrouterOptionsMap"
+                    type="select"
+                    name="Default Model"
+                    description="OpenRouter model for general planning"
+                    @change="settingsChanged"
+                  />
+                </div>
               </div>
 
               <!-- Agent Prompts Section -->
@@ -1095,9 +1243,15 @@ window.ytmd.handleUpdateDownloaded(() => {
                     }"
                     type="select"
                     name="Provider"
+                    @change="analystProviderChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssAnalystModel"
+                    :options-map="getOptionsMapForProvider(lightssAnalystProvider)"
+                    type="select"
+                    name="Model"
                     @change="settingsChanged"
                   />
-                  <YTMDSetting v-model="lightssAnalystModel" type="text" name="Model" @change="settingsChanged" />
                   <p class="agent-desc">Provider and model are unused — only the custom prompt below applies (prepended to each agent).</p>
 
                   <div class="prompt-field">
@@ -1144,9 +1298,15 @@ window.ytmd.handleUpdateDownloaded(() => {
                     }"
                     type="select"
                     name="Provider"
+                    @change="sketchProviderChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssSketchModel"
+                    :options-map="getOptionsMapForProvider(lightssSketchProvider)"
+                    type="select"
+                    name="Model"
                     @change="settingsChanged"
                   />
-                  <YTMDSetting v-model="lightssSketchModel" type="text" name="Model" @change="settingsChanged" />
                   <YTMDSetting
                     v-model="lightssVisionEnabled"
                     type="checkbox"
@@ -1186,9 +1346,15 @@ window.ytmd.handleUpdateDownloaded(() => {
                     }"
                     type="select"
                     name="Provider"
+                    @change="wledProviderChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssWledModel"
+                    :options-map="getOptionsMapForProvider(lightssWledProvider)"
+                    type="select"
+                    name="Model"
                     @change="settingsChanged"
                   />
-                  <YTMDSetting v-model="lightssWledModel" type="text" name="Model" @change="settingsChanged" />
 
                   <div class="prompt-field">
                     <div class="prompt-field-header">
@@ -1234,9 +1400,15 @@ window.ytmd.handleUpdateDownloaded(() => {
                     }"
                     type="select"
                     name="Provider"
+                    @change="canvasProviderChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssCanvasModel"
+                    :options-map="getOptionsMapForProvider(lightssCanvasProvider)"
+                    type="select"
+                    name="Model"
                     @change="settingsChanged"
                   />
-                  <YTMDSetting v-model="lightssCanvasModel" type="text" name="Model" @change="settingsChanged" />
 
                   <div class="prompt-field">
                     <div class="prompt-field-header">
@@ -1282,9 +1454,15 @@ window.ytmd.handleUpdateDownloaded(() => {
                     }"
                     type="select"
                     name="Provider"
+                    @change="hostProviderChanged"
+                  />
+                  <YTMDSetting
+                    v-model="lightssHostModel"
+                    :options-map="getOptionsMapForProvider(lightssHostProvider)"
+                    type="select"
+                    name="Model"
                     @change="settingsChanged"
                   />
-                  <YTMDSetting v-model="lightssHostModel" type="text" name="Model" @change="settingsChanged" />
 
                   <div class="prompt-field">
                     <div class="prompt-field-header">
@@ -1538,6 +1716,29 @@ window.ytmd.handleUpdateDownloaded(() => {
 
 .content::-webkit-scrollbar-thumb {
   background-color: #414141;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  border-bottom: 1px solid #212121;
+}
+
+.sidebar-brand-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.45));
+}
+
+.sidebar-brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #eeeeee;
+  text-transform: uppercase;
 }
 
 .sidebar {
@@ -2135,5 +2336,54 @@ button {
 .hint-box button:hover {
   background-color: hsl(265, 65%, 35%);
   border-color: hsl(265, 70%, 55%);
+}
+
+.providers-setup-container {
+  background-color: #0b0b0b;
+  border-radius: 8px;
+  border: 1px solid #1a1a1a;
+  padding: 16px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.provider-sub-block {
+  border-bottom: 1px solid #1a1a1a;
+  padding-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-sub-block:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.provider-header h5 {
+  margin: 0;
+  color: #eeeeee;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.provider-header .provider-badge {
+  background-color: #212121;
+  color: #888888;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
 }
 </style>

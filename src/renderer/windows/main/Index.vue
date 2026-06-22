@@ -88,6 +88,7 @@ const lightStatus = computed(() => {
   if (status === "failed") return { label: "Scene failed", state: "bad" };
   return { label: "Scene idle", state: "idle" };
 });
+const fusionHtml = computed(() => aiLightshowMessage.value?.flashUiHtml?.trim() ?? "");
 
 const track = computed<ShellTrack>(() => {
   if (!playerState.value?.videoDetails) return placeholderTrack;
@@ -113,9 +114,12 @@ const actions: ShellActions = {
   next: () => window.ytmd.playerControl("next"),
   openMiniPlayer: () => window.ytmd.openMiniPlayer(),
   openSettings: () => window.ytmd.openSettingsWindow(),
+  openFlashUi: () => window.ytmd.openFlashUiWindow(),
   playPause: () => window.ytmd.playerControl("playPause"),
   previous: () => window.ytmd.playerControl("previous"),
   restoreFromMiniPlayer: () => window.ytmd.restoreFromMiniPlayer(),
+  seekBackward: () => window.ytmd.playerControl("seekBackward"),
+  seekForward: () => window.ytmd.playerControl("seekForward"),
   setPlayerLayout: (layout: PlayerLayout) => window.ytmd.store.set("appearance.playerLayout", layout),
   setTopBarLayout: (layout: TopBarLayout) => window.ytmd.store.set("appearance.topBarLayout", layout),
   toggleDislike: () => window.ytmd.playerControl("toggleDislike"),
@@ -298,6 +302,8 @@ onUnmounted(() => {
       :audio-data="audioData"
       :theme="vuMeterTheme"
       :vu-meter-style="vuMeterStyle"
+      :ai-lightshow-message="aiLightshowMessage"
+      :fusion-html="fusionHtml"
     />
   </div>
   <Suspense>

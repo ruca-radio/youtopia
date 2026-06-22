@@ -32,7 +32,8 @@ const config: ForgeConfig = {
       "./src/assets/icons/controls/play-next-button.png",
       "./src/assets/icons/controls/play-previous-button.png",
 
-      "./src/assets/provider-logos/openai.png"
+      "./src/assets/provider-logos/openai.png",
+      "./src/assets/flash-ui-dist"
     ],
     protocols: [
       {

@@ -576,6 +576,25 @@ window.addEventListener("load", async () => {
         )(value);
         break;
 
+      case "seekRelative": {
+        const offsetSeconds: number = parseInt(value);
+        if (isNaN(offsetSeconds)) return;
+        (
+          await webFrame.executeJavaScript(`
+            (function(offsetSeconds) {
+              const playerBar = document.querySelector("ytmusic-app-layout>ytmusic-player-bar");
+              const playerApi = playerBar && playerBar.playerApi;
+              if (!playerApi || typeof playerApi.seekTo !== "function") return;
+              const currentTime = typeof playerApi.getCurrentTime === "function" ? Number(playerApi.getCurrentTime()) : 0;
+              const duration = typeof playerApi.getDuration === "function" ? Number(playerApi.getDuration()) : Number.POSITIVE_INFINITY;
+              const nextTime = Math.max(0, Math.min(Number.isFinite(duration) ? duration : Number.POSITIVE_INFINITY, currentTime + offsetSeconds));
+              playerApi.seekTo(nextTime);
+            })
+          `)
+        )(offsetSeconds);
+        break;
+      }
+
       case "shuffle":
         (
           await webFrame.executeJavaScript(`
@@ -725,6 +744,127 @@ window.addEventListener("load", async () => {
         (await webFrame.executeJavaScript(script))();
       }
     }
+  });
+
+  // AI Music Filtering Engine
+  let excludeAiMusic = false;
+
+  function isAiGeneratedText(title: string, author: string, album: string): boolean {
+    const t = (title || "").toLowerCase();
+    const a = (author || "").toLowerCase();
+    const al = (album || "").toLowerCase();
+
+    const aiKeywords = [
+      "suno ai",
+      "udio ai",
+      "soundraw",
+      "beatoven",
+      "boomy",
+      "mubert",
+      "loudly",
+      "stable audio",
+      "musicgen",
+      "ai-generated",
+      "ai generated",
+      "generative ai",
+      "artificial intelligence",
+      "generative-ai"
+    ];
+
+    if (aiKeywords.some(keyword => t.includes(keyword) || a.includes(keyword) || al.includes(keyword))) {
+      return true;
+    }
+
+    const wordBoundaryPlatforms = /\b(suno|udio|aiva)\b/i;
+    if (wordBoundaryPlatforms.test(t) || wordBoundaryPlatforms.test(a) || wordBoundaryPlatforms.test(al)) {
+      return true;
+    }
+
+    const aiPatterns = [
+      /\b(ai|a\.i\.)\s+(cover|remix|version|generated|song|music|track|jingle|voice|vocal)\b/i,
+      /[([](ai|a\.i\.)\s*(cover|remix|version|edit|gen|generated|produced|voice|vocals)[)\]]/i,
+      /\bfeat\.\s+(ai|a\.i\.)\b/i,
+      /\bft\.\s+(ai|a\.i\.)\b/i,
+      /\b(ai|a\.i\.)\s+feat\b/i,
+      /\b(ai|a\.i\.)\s+ft\b/i
+    ];
+
+    if (aiPatterns.some(pattern => pattern.test(t) || pattern.test(a) || pattern.test(al))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function applyAiMusicFilter() {
+    if (!excludeAiMusic) {
+      document.querySelectorAll('[data-ai-filtered="true"]').forEach(el => {
+        (el as HTMLElement).style.display = "";
+        el.removeAttribute("data-ai-filtered");
+      });
+      return;
+    }
+
+    const items = document.querySelectorAll("ytmusic-responsive-list-item-renderer, ytmusic-player-queue-item");
+    items.forEach(item => {
+      let title = "";
+      let artist = "";
+      let album = "";
+
+      if (item.tagName.toLowerCase() === "ytmusic-player-queue-item") {
+        const titleEl = item.querySelector(".song-title");
+        const artistEl = item.querySelector(".byline");
+        title = titleEl?.textContent?.trim() || "";
+        artist = artistEl?.textContent?.trim() || "";
+      } else {
+        const titleEl = item.querySelector(".title, .song-title");
+        title = titleEl?.textContent?.trim() || "";
+
+        const secondaryColumns = item.querySelectorAll(".secondary-flex-columns yt-formatted-string, .byline, .subtitle");
+        if (secondaryColumns.length > 0) {
+          artist = secondaryColumns[0]?.textContent?.trim() || "";
+          if (secondaryColumns.length > 1) {
+            album = secondaryColumns[1]?.textContent?.trim() || "";
+          }
+        } else {
+          const flexColumns = item.querySelectorAll(".flex-column");
+          if (flexColumns.length > 1) {
+            artist = flexColumns[1]?.textContent?.trim() || "";
+            if (flexColumns.length > 2) {
+              album = flexColumns[2]?.textContent?.trim() || "";
+            }
+          }
+        }
+      }
+
+      if (title || artist) {
+        if (isAiGeneratedText(title, artist, album)) {
+          (item as HTMLElement).style.display = "none";
+          item.setAttribute("data-ai-filtered", "true");
+        }
+      }
+    });
+  }
+
+  ipcRenderer.on("settings:stateChanged", (event, newState) => {
+    if (newState && newState.playback) {
+      excludeAiMusic = !!newState.playback.excludeAiMusicFromPlaylists;
+      applyAiMusicFilter();
+    }
+  });
+
+  // Apply filter periodically & observe DOM changes
+  applyAiMusicFilter();
+  setInterval(applyAiMusicFilter, 800);
+
+  const observer = new MutationObserver(() => {
+    if (excludeAiMusic) {
+      applyAiMusicFilter();
+    }
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
   });
 
   ipcRenderer.send("ytmView:loaded");

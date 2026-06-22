@@ -2,6 +2,7 @@
 import IconButton from "./IconButton.vue";
 import { PlayerLayout, TopBarLayout } from "~shared/store/schema";
 import { ShellActions } from "./types";
+import logo from "~assets/icons/ytmd.png";
 
 defineProps<{
   actions: ShellActions;
@@ -13,7 +14,7 @@ defineProps<{
 <template>
   <header class="command-top-bar">
     <div class="left">
-      <div class="brand" title="Youtopia"><span class="material-symbols-outlined">music_note</span></div>
+      <div class="brand" title="Youtopia"><img :src="logo" alt="Youtopia" class="brand-logo" /></div>
       <IconButton icon="home" label="Home" @click="actions.navigateHome" />
       <IconButton icon="arrow_back" label="Back" disabled />
       <IconButton icon="arrow_forward" label="Forward" disabled />
@@ -60,6 +61,7 @@ defineProps<{
         label="Switch top bar"
         @click="actions.setTopBarLayout(activeTopBarLayout === TopBarLayout.Command ? TopBarLayout.TwoLevel : TopBarLayout.Command)"
       />
+      <IconButton icon="auto_awesome" label="Fusion Studio" @click="actions.openFlashUi" />
       <IconButton icon="settings" label="Settings" @click="actions.openSettings" />
       <IconButton icon="picture_in_picture_alt" label="Mini-player" @click="actions.openMiniPlayer" />
       <slot name="window-controls"></slot>
@@ -95,10 +97,16 @@ defineProps<{
 .brand {
   width: 30px;
   height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   border-radius: 8px;
-  background: #d72b2b;
-  display: grid;
-  place-items: center;
 }
 
 .search {

@@ -29,6 +29,10 @@ contextBridge.exposeInMainWorld("ytmd", {
     decryptString: async (value: string) => await ipcRenderer.invoke("safeStorage:decryptString", value),
     encryptString: async (value: string) => await ipcRenderer.invoke("safeStorage:encryptString", value)
   },
+  ai: {
+    fetchModels: async (provider: string, baseUrl?: string, apiKey?: string): Promise<string[]> =>
+      await ipcRenderer.invoke("ai:fetchModels", provider, baseUrl, apiKey)
+  },
   restartApplication: () => ipcRenderer.send("settingsWindow:restartapplication"),
   restartApplicationForUpdate: () => ipcRenderer.send("app:restartApplicationForUpdate"),
   minimizeWindow: () => ipcRenderer.send("settingsWindow:minimize"),

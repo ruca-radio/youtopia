@@ -263,10 +263,10 @@ public final class MainActivity extends Activity {
                 sendControl("next");
                 return true;
             case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
-                sendControl("volumeUp");
+                sendControl("seekForward");
                 return true;
             case KeyEvent.KEYCODE_MEDIA_REWIND:
-                sendControl("volumeDown");
+                sendControl("seekBackward");
                 return true;
             case KeyEvent.KEYCODE_MENU:
                 reloadTv();

@@ -20,7 +20,9 @@ bash scripts/build-firetv-receiver.sh
 echo "============================================="
 echo "Installing Fire TV receiver APK via ADB..."
 echo "============================================="
+adb connect 10.27.27.207:5555
 adb install -r firetv-receiver/build/youtopia-tv-receiver.apk
+adb shell am start -n studio.youtopia.tvreceiver/.MainActivity
 
 echo "============================================="
 echo "Rebuild and installation complete!"

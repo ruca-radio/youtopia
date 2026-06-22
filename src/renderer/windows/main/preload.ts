@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("ytmd", {
     ipcRenderer.on("mainWindow:stateChanged", callback),
   requestWindowState: () => ipcRenderer.send("mainWindow:requestWindowState"),
   openSettingsWindow: () => ipcRenderer.send("settingsWindow:open"),
+  openFlashUiWindow: () => ipcRenderer.send("flashUiWindow:open"),
   switchFocus: (context: string) => ipcRenderer.send("ytmView:switchFocus", context),
   ytmViewNavigateDefault: () => ipcRenderer.send("ytmView:navigateDefault"),
   ytmViewRecreate: () => ipcRenderer.send("ytmView:recreate"),
@@ -52,6 +53,16 @@ contextBridge.exposeInMainWorld("ytmd", {
     set: (key: string, value: unknown) => memoryStore.set(key, value),
     get: async (key: keyof MemoryStoreSchema) => await memoryStore.get(key),
     onStateChanged: (callback: (newState: MemoryStoreSchema, oldState: MemoryStoreSchema) => void) => memoryStore.onStateChanged(callback)
+  },
+  ai: {
+    fetchModels: async (provider: string, baseUrl?: string, apiKey?: string): Promise<string[]> =>
+      await ipcRenderer.invoke("ai:fetchModels", provider, baseUrl, apiKey),
+    chat: async (options: {
+      provider: string;
+      model: string;
+      systemPrompt?: string;
+      messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+    }): Promise<string> => await ipcRenderer.invoke("ai:chat", options)
   },
   restartApplicationForUpdate: () => ipcRenderer.send("app:restartApplicationForUpdate")
 });

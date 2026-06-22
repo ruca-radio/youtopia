@@ -1,21 +1,4 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="320dp"
-    android:height="180dp"
-    android:viewportWidth="320"
-    android:viewportHeight="180">
-    <path
-        android:fillColor="#000000"
-        android:pathData="M0,0h320v180h-320z" />
-    <path
-        android:fillColor="#22C55E"
-        android:pathData="M74,54h24l42,56l42,-56h24l-53,70v28h-26v-28z" />
-    <path
-        android:fillColor="#D946EF"
-        android:pathData="M60,146h200v10h-200z" />
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M131,72l62,38l-62,38z" />
-    <path
-        android:fillColor="#22C55E"
-        android:pathData="M236,70a10,10 0,1 0,0.1 0M264,70a10,10 0,1 0,0.1 0M292,70a10,10 0,1 0,0.1 0" />
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/youtopia_logo_image"
+    android:gravity="center" />

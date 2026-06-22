@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Youtopia Fusion Studio</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --panel: rgba(12, 12, 12, 0.88);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f7f7f7;
+      --muted: #9ca3af;
+      --accent: #ef4444;
+      --low: #22c55e;
+      --mid: #facc15;
+      --hot: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      letter-spacing: 0;
+    }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      background:
+        radial-gradient(circle at 28% 18%, color-mix(in srgb, var(--accent), transparent 82%), transparent 30%),
+        radial-gradient(circle at 78% 78%, color-mix(in srgb, var(--low), transparent 86%), transparent 34%),
+        #000000;
+    }
+
+    .preview-frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #000000;
+    }
+
+    .fallback {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 5vw;
+      text-align: center;
+    }
+
+    .fallback-inner {
+      width: min(720px, 88vw);
+      display: grid;
+      gap: 20px;
+    }
+
+    .fallback h1 {
+      margin: 0;
+      font-size: clamp(40px, 7vw, 96px);
+      line-height: 0.92;
+      letter-spacing: 0;
+    }
+
+    .fallback p {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(16px, 1.6vw, 22px);
+      line-height: 1.4;
+    }
+
+    .ambient-meter {
+      height: 140px;
+      display: grid;
+      grid-template-columns: repeat(32, 1fr);
+      gap: 5px;
+      align-items: end;
+    }
+
+    .ambient-meter i {
+      min-height: 8px;
+      border-radius: 999px 999px 3px 3px;
+      background: linear-gradient(to top, var(--low), var(--mid) 62%, var(--hot));
+      opacity: 0.72;
+      transition: height 120ms ease;
+    }
+
+    .side {
+      min-width: 0;
+      border-left: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(20, 20, 20, 0.94), rgba(5, 5, 5, 0.98));
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      gap: 16px;
+    }
+
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand {
+      display: grid;
+      gap: 2px;
+    }
+
+    .brand strong {
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+
+    .brand span,
+    .meta,
+    .field span,
+    .empty {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .back {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .now {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .art {
+      width: 74px;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--accent), #111111);
+    }
+
+    .art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.08;
+      max-height: 2.2em;
+      overflow: hidden;
+    }
+
+    .artist {
+      margin-top: 5px;
+      color: #d1d5db;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .progress {
+      grid-column: 1 / -1;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+    }
+
+    .progress b {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 250ms linear;
+    }
+
+    .fields {
+      min-height: 0;
+      overflow: auto;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      padding-right: 2px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .field strong {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #e5e7eb;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .chip {
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: #d1d5db;
+      background: rgba(255, 255, 255, 0.055);
+      font-size: 12px;
+    }
+
+    .chip.ok { color: #bbf7d0; border-color: rgba(34, 197, 94, 0.38); background: rgba(34, 197, 94, 0.14); }
+    .chip.busy { color: #fde68a; border-color: rgba(245, 158, 11, 0.38); background: rgba(245, 158, 11, 0.14); }
+    .chip.bad { color: #fecaca; border-color: rgba(239, 68, 68, 0.42); background: rgba(239, 68, 68, 0.14); }
+
+    .footer {
+      display: grid;
+      gap: 8px;
+    }
+
+    .mini-meter {
+      height: 40px;
+      display: grid;
+      grid-template-columns: repeat(32, 1fr);
+      gap: 2px;
+      align-items: end;
+    }
+
+    .mini-meter i {
+      min-height: 3px;
+      border-radius: 999px;
+      background: var(--hot);
+      opacity: 0.72;
+      transition: height 120ms ease;
+    }
+
+    @media (max-width: 920px) {
+      body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+      .side { max-height: 44vh; border-left: 0; border-top: 1px solid var(--line); }
+      .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <iframe id="fusionPreview" class="preview-frame" sandbox="allow-scripts" title="Live AI fusion output"></iframe>
+    <div id="fallback" class="fallback">
+      <div class="fallback-inner">
+        <h1>Fusion waiting</h1>
+        <p>Start playback with Lightss enabled. When the AI canvas agent returns custom HTML, this surface renders the exact TV fusion output and streams live player state into it.</p>
+        <div id="ambientMeter" class="ambient-meter" aria-hidden="true"></div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="side">
+    <div class="topline">
+      <div class="brand">
+        <strong>Youtopia Fusion Studio</strong>
+        <span>Live AI canvas output for TV and fullscreen VU</span>
+      </div>
+      <button id="backToTv" class="back" type="button">TV</button>
+    </div>
+
+    <section class="now">
+      <div class="art"><img id="art" alt="" hidden /></div>
+      <div>
+        <h2 id="title">Waiting for Youtopia</h2>
+        <div id="artist" class="artist">No track state yet</div>
+      </div>
+      <div class="progress"><b id="progress"></b></div>
+    </section>
+
+    <section class="fields">
+      <div class="field">
+        <strong>Runtime</strong>
+        <div class="chips">
+          <span id="connectionChip" class="chip">Connecting</span>
+          <span id="fusionChip" class="chip">No fusion HTML</span>
+          <span id="audioChip" class="chip">Audio idle</span>
+        </div>
+      </div>
+      <div class="field">
+        <strong>AI Host</strong>
+        <span id="hostLine">Waiting for the VJ host line.</span>
+      </div>
+      <div class="field">
+        <strong>Ticker</strong>
+        <span id="ticker">Waiting for ticker copy.</span>
+      </div>
+      <div class="field">
+        <strong>Theme</strong>
+        <span id="theme">No theme applied yet.</span>
+      </div>
+      <div class="field">
+        <strong>Visualizer Contract</strong>
+        <span>Fusion pages receive <code>playerState</code> and <code>audioBins</code> messages. They should keep a black base, use slow morphing motion, and avoid blinking, strobe, or hard flashes.</span>
+      </div>
+    </section>
+
+    <div class="footer">
+      <div id="miniMeter" class="mini-meter" aria-hidden="true"></div>
+      <div id="meta" class="meta">Subscribing to /tv/events</div>
+    </div>
+  </aside>
+
+  <script>
+    const state = {
+      latest: null,
+      bins: new Array(32).fill(0),
+      displayedBins: new Array(32).fill(0),
+      loadedHtml: ""
+    };
+
+    const fusionPreview = document.getElementById("fusionPreview");
+    const fallback = document.getElementById("fallback");
+    const title = document.getElementById("title");
+    const artist = document.getElementById("artist");
+    const art = document.getElementById("art");
+    const progress = document.getElementById("progress");
+    const hostLine = document.getElementById("hostLine");
+    const ticker = document.getElementById("ticker");
+    const theme = document.getElementById("theme");
+    const meta = document.getElementById("meta");
+    const connectionChip = document.getElementById("connectionChip");
+    const fusionChip = document.getElementById("fusionChip");
+    const audioChip = document.getElementById("audioChip");
+    const backToTv = document.getElementById("backToTv");
+    const miniMeter = document.getElementById("miniMeter");
+    const ambientMeter = document.getElementById("ambientMeter");
+
+    const miniBars = createBars(miniMeter, 32);
+    const ambientBars = createBars(ambientMeter, 32);
+
+    function createBars(root, count) {
+      const bars = [];
+      for (let i = 0; i < count; i += 1) {
+        const bar = document.createElement("i");
+        bar.style.height = "8%";
+        root.appendChild(bar);
+        bars.push(bar);
+      }
+      return bars;
+    }
+
+    function sanitizeFusionHtml(html) {
+      if (typeof html !== "string") return "";
+      let safe = html.trim();
+      if (!safe) return "";
+      safe = safe.slice(0, 180000);
+      safe = safe.replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*["'][^>]*>\s*<\/script>/gi, "");
+      safe = safe.replace(/<(iframe|object|embed|base|form)\b[\s\S]*?<\/\1>/gi, "");
+      safe = safe.replace(/<(iframe|object|embed|base|form)\b[^>]*\/?>/gi, "");
+      safe = safe.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, "");
+      safe = safe.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+      safe = safe.replace(/javascript\s*:/gi, "");
+      return safe;
+    }
+
+    function setChip(el, label, stateName) {
+      el.textContent = label;
+      el.className = "chip" + (stateName ? " " + stateName : "");
+    }
+
+    function applyTheme(displayTheme) {
+      if (!displayTheme) return;
+      const root = document.documentElement;
+      const accent = safeHex(displayTheme.accentColor, "#ef4444");
+      const low = safeHex(displayTheme.vuLowColor, "#22c55e");
+      const mid = safeHex(displayTheme.vuMidColor, "#facc15");
+      const hot = safeHex(displayTheme.vuHighColor, "#ef4444");
+      root.style.setProperty("--accent", accent);
+      root.style.setProperty("--low", low);
+      root.style.setProperty("--mid", mid);
+      root.style.setProperty("--hot", hot);
+      theme.textContent = [accent, low, mid, hot].join(" / ");
+    }
+
+    function safeHex(value, fallback) {
+      return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : fallback;
+    }
+
+    function applyFusionHtml(html) {
+      const safe = sanitizeFusionHtml(html);
+      if (!safe) {
+        state.loadedHtml = "";
+        fusionPreview.removeAttribute("srcdoc");
+        fusionPreview.style.display = "none";
+        fallback.style.display = "grid";
+        setChip(fusionChip, "No fusion HTML", "");
+        return;
+      }
+      if (state.loadedHtml !== safe) {
+        state.loadedHtml = safe;
+        fusionPreview.srcdoc = safe;
+      }
+      fusionPreview.style.display = "block";
+      fallback.style.display = "none";
+      setChip(fusionChip, "Fusion live", "ok");
+    }
+
+    function postFusionPlayerState() {
+      if (!fusionPreview.contentWindow || !state.latest) return;
+      const player = state.latest.player || {};
+      const lightss = state.latest.lightss || {};
+      fusionPreview.contentWindow.postMessage({
+        type: "playerState",
+        player: {
+          title: player.title || "",
+          artist: player.artist || "",
+          album: player.album || "",
+          albumArtUrl: player.albumArtUrl || "",
+          progressPercent: player.progressPercent || 0,
+          progressSeconds: player.progressSeconds || 0,
+          durationSeconds: player.durationSeconds || 0,
+          isPlaying: Boolean(player.isPlaying),
+          volume: player.volume || 0
+        },
+        lightss: {
+          hostLine: lightss.hostLine || "",
+          tickerMessage: lightss.tickerMessage || "",
+          aiStatus: lightss.aiStatus || "",
+          wledStatus: lightss.wledStatus || "",
+          displayTheme: lightss.displayTheme || {},
+          visualScene: lightss.visualScene || {}
+        }
+      }, "*");
+    }
+
+    function postFusionAudioBins() {
+      if (!fusionPreview.contentWindow) return;
+      fusionPreview.contentWindow.postMessage({ type: "audioBins", bins: state.displayedBins.map(value => Math.round(value)) }, "*");
+    }
+
+    function applyState(nextState) {
+      state.latest = nextState;
+      const player = nextState.player || {};
+      const lightss = nextState.lightss || {};
+      const audio = nextState.audio || {};
+      state.bins = Array.isArray(audio.bins) ? audio.bins.slice(0, 32) : new Array(32).fill(0);
+
+      title.textContent = player.title || "Waiting for Youtopia";
+      artist.textContent = player.artist || "No artist";
+      progress.style.width = Math.max(0, Math.min(100, Number(player.progressPercent || 0))) + "%";
+      if (player.albumArtUrl) {
+        art.hidden = false;
+        art.src = player.albumArtUrl;
+      } else {
+        art.hidden = true;
+        art.removeAttribute("src");
+      }
+
+      hostLine.textContent = lightss.hostLine || lightss.message || "Waiting for the VJ host line.";
+      ticker.textContent = lightss.tickerMessage || "Waiting for ticker copy.";
+      applyTheme(lightss.displayTheme);
+      applyFusionHtml(lightss.flashUiHtml || "");
+      postFusionPlayerState();
+
+      setChip(connectionChip, "TV state live", "ok");
+      setChip(audioChip, audio.live ? "Audio bins live" : "Audio fallback", audio.live ? "ok" : "");
+      meta.textContent = lightss.provider && lightss.model ? lightss.provider + " / " + lightss.model : "Listening to /tv/events";
+    }
+
+    function connectEvents() {
+      if (!window.EventSource) {
+        setInterval(pollState, 750);
+        pollState();
+        return;
+      }
+      const source = new EventSource("/tv/events");
+      source.onopen = () => setChip(connectionChip, "TV state live", "ok");
+      source.onmessage = event => applyState(JSON.parse(event.data));
+      source.onerror = () => {
+        setChip(connectionChip, "SSE retrying", "busy");
+        pollState();
+      };
+    }
+
+    async function pollState() {
+      try {
+        const response = await fetch("/tv/state", { cache: "no-store" });
+        applyState(await response.json());
+      } catch (error) {
+        setChip(connectionChip, "TV state offline", "bad");
+      }
+    }
+
+    function animateMeters() {
+      for (let i = 0; i < state.displayedBins.length; i += 1) {
+        const target = state.bins[i] || 0;
+        state.displayedBins[i] += (target - state.displayedBins[i]) * 0.18;
+        const height = Math.max(5, Math.min(100, (state.displayedBins[i] / 255) * 100));
+        miniBars[i].style.height = height + "%";
+        ambientBars[i].style.height = height + "%";
+      }
+      postFusionAudioBins();
+      requestAnimationFrame(animateMeters);
+    }
+
+    backToTv.addEventListener("click", () => {
+      window.location.href = "/tv";
+    });
+    fusionPreview.addEventListener("load", postFusionPlayerState);
+
+    connectEvents();
+    animateMeters();
+  </script>
+</body>
+</html>

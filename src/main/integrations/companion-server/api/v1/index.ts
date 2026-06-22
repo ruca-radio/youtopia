@@ -419,6 +419,70 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
       return `Played queue index ${queueIndex}`;
     }
 
+    if (action.type === "searchSongs") {
+      const ytmView = options.getYtmView();
+      if (ytmView && action.query) {
+        await ytmView.webContents.loadURL(`https://music.youtube.com/search?q=${encodeURIComponent(action.query)}`);
+        return `Searched for songs with query: "${action.query}"`;
+      }
+      return `Failed to search songs: ytmView or query missing`;
+    }
+
+    if (action.type === "buildPlaylist") {
+      const ytmView = options.getYtmView();
+      if (ytmView && action.playlistName) {
+        try {
+          const playlistId = await ytmView.webContents.executeJavaScript(`
+            new Promise((resolve, reject) => {
+              const playerBar = document.querySelector("ytmusic-app-layout>ytmusic-player-bar");
+              if (!playerBar) {
+                reject("player bar not found");
+                return;
+              }
+              const returnValue = [];
+              const serviceRequestEvent = {
+                bubbles: true,
+                cancelable: false,
+                composed: true,
+                detail: {
+                  actionName: "yt-service-request",
+                  args: [
+                    playerBar,
+                    {
+                      createPlaylistServiceEndpoint: {}
+                    },
+                    {
+                      create_playlist_title: ${JSON.stringify(action.playlistName)}
+                    }
+                  ],
+                  optionalAction: false,
+                  returnValue
+                }
+              };
+              playerBar.dispatchEvent(new CustomEvent("yt-action", serviceRequestEvent));
+              if (returnValue[0] && returnValue[0].ajaxPromise) {
+                returnValue[0].ajaxPromise.then(
+                  response => {
+                    resolve(response?.data?.playlistId || "created");
+                  },
+                  () => {
+                    reject("API request failed");
+                  }
+                );
+              } else {
+                reject("no return ajaxPromise");
+              }
+            })
+          `);
+          return `Successfully created playlist "${action.playlistName}" in background (ID: ${playlistId})`;
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          return `Failed to build playlist in background: ${errMsg}`;
+        }
+      }
+      return `Failed to build playlist: ytmView or playlistName missing`;
+    }
+
     return `${action.type} planned for background execution`;
   };
 
@@ -750,10 +814,8 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
       }
 
       const model =
-        (
-          options.getStore().get<"integrations.lightssOpenAIAudioDirectorModel", string>("integrations.lightssOpenAIAudioDirectorModel") ||
-          DEFAULT_AUDIO_DIRECTOR_MODEL
-        ).trim() || DEFAULT_AUDIO_DIRECTOR_MODEL;
+        ((options.getStore().get("integrations.lightssOpenAIAudioDirectorModel") as string | undefined) || DEFAULT_AUDIO_DIRECTOR_MODEL).trim() ||
+        DEFAULT_AUDIO_DIRECTOR_MODEL;
       const maxActions = clampNumber(request.body.maxActions, 1, 8, 5);
       const context = buildAudioDirectorContext();
       const openAiResponse = await postJson<JsonValue>(
@@ -805,7 +867,6 @@ const CompanionServerAPIv1: FastifyPluginCallback<CompanionServerAPIv1Options> =
       const executed: string[] = [];
       if (request.body.execute) {
         for (const action of plan.actions) {
-          if (action.type === "searchSongs" || action.type === "buildPlaylist") continue;
           executed.push(await executeAudioDirectorAction(action));
         }
       }

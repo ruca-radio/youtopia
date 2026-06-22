@@ -594,7 +594,7 @@ export default class LightssIntegration implements IIntegration {
         visualScene: this.sanitizeVisualScene(canvasRes?.visualScene),
         tickerMessage: this.safeString(hostRes?.tickerMessage, "VJ: Coordinated canvas visualizers and ambient WLED backing aligned."),
         steps: sanitizedSteps,
-        flashUiHtml: this.safeString((canvasRes as { flashUiHtml?: string })?.flashUiHtml, "")
+        flashUiHtml: this.sanitizeFlashUiHtml((canvasRes as { flashUiHtml?: string })?.flashUiHtml)
       };
 
       this.emitAiMessage("Full plan ready", mergedPlan.hostLine || mergedPlan.rationale, {
@@ -722,7 +722,7 @@ export default class LightssIntegration implements IIntegration {
       visualScene: this.sanitizeVisualScene(result.visualScene),
       tickerMessage: this.safeString(result.tickerMessage, "Sketch plan — full analysis loading..."),
       steps: sanitizedSteps,
-      flashUiHtml: this.safeString(result.flashUiHtml, "")
+      flashUiHtml: this.sanitizeFlashUiHtml(result.flashUiHtml)
     };
   }
 
@@ -1066,7 +1066,20 @@ export default class LightssIntegration implements IIntegration {
             visualizerStyle: { type: "string", enum: ["vuBars", "vuDots", "spectrumLine", "none"] },
             vuStyle: {
               type: "string",
-              enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow", "radialWave", "waveScope", "pixelBlocks", "floatingOrbs"]
+              enum: [
+                "bars",
+                "classicLed",
+                "dotMatrix",
+                "spectrumLine",
+                "albumGlow",
+                "radialWave",
+                "waveScope",
+                "pixelBlocks",
+                "floatingOrbs",
+                "fireFlame",
+                "doubleSpectrum",
+                "neonPulse"
+              ]
             },
             motion: { type: "string", enum: ["static", "slow", "medium"] },
             density: { type: "integer", minimum: 0, maximum: 100 },
@@ -1141,7 +1154,20 @@ export default class LightssIntegration implements IIntegration {
             visualizerStyle: { type: "string", enum: ["vuBars", "vuDots", "spectrumLine", "none"] },
             vuStyle: {
               type: "string",
-              enum: ["bars", "classicLed", "dotMatrix", "spectrumLine", "albumGlow", "radialWave", "waveScope", "pixelBlocks", "floatingOrbs"]
+              enum: [
+                "bars",
+                "classicLed",
+                "dotMatrix",
+                "spectrumLine",
+                "albumGlow",
+                "radialWave",
+                "waveScope",
+                "pixelBlocks",
+                "floatingOrbs",
+                "fireFlame",
+                "doubleSpectrum",
+                "neonPulse"
+              ]
             },
             motion: { type: "string", enum: ["static", "slow", "medium"] },
             density: { type: "integer", minimum: 0, maximum: 100 },
@@ -1498,7 +1524,7 @@ export default class LightssIntegration implements IIntegration {
       tickerMessage: options.tickerMessage ?? plan?.tickerMessage,
       hostLine: options.hostLine ?? plan?.hostLine,
       planPhase: options.planPhase,
-      flashUiHtml: (options.flashUiHtml ?? plan?.flashUiHtml) || "",
+      flashUiHtml: this.sanitizeFlashUiHtml(options.flashUiHtml ?? plan?.flashUiHtml),
       timestamp: Date.now()
     };
 
@@ -1548,21 +1574,19 @@ export default class LightssIntegration implements IIntegration {
 
   private getFlashUiPromptInstruction(): string {
     return [
-      "Additionally, you MUST generate a stunning, responsive, self-contained HTML/CSS/JS presentation page and visualizer for the current song in the 'flashUiHtml' field.",
-      "Guidelines for 'flashUiHtml':",
-      "- Background & Aesthetics: Must have a true black background (#000000) for OLED/screen protection. Use low-opacity layers, ambient glows, or subtle moving particles over the black.",
-      "- Palette & Alignment: Choose primary and secondary colors as variables matching the current WLED colors (passed in context) and use them for ambient glows, text highlights, and VU hot points.",
-      "- Split-Screen Dashboard Layout (Youtopia Player UI): Recreate a clean, premium split-pane TV dashboard layout mirroring the desktop player interface:",
-      "  - Left Pane (Hero Control Card):",
-      "    - A beautiful floating/hovering Album Art card container using frosted Glassmorphism (backdrop-filter: blur(20px), background: rgba(255,255,255,0.03), border with low-opacity white).",
-      "    - Large Album Art image inside. The card should have an ambient shadow glow that pulses to the audio bass.",
-      "    - Track details: Title (large, bold), Artist, Album, and a sleek visual progress timeline bar.",
-      "    - Slick inline mock player control buttons (Previous, Play/Pause toggle, Next) styled as glassmorphic circles.",
-      "  - Right Pane (Reactive Visualizer & VJ Stage):",
-      "    - Reactive Visualizer: Create a gorgeous visualizer structure (e.g. 32 dynamic vertical bars with gradient fills, radial spectrum rings, or particle fields).",
-      "    - AI VJ Subtitle & Ticker: A clean container showing the VJ host comment (hostLine), and a horizontal scrolling marquee ticker (tickerMessage) scrolling across the bottom.",
-      "    - Interactive Queue List: A mockup sidebar listing 'Up Next' tracks matching the track's genre or mood.",
-      "- Message Listeners & Live Updates: Listen to both 'audioBins' and 'playerState' window message events:",
+      "Additionally, you MUST generate a stunning, responsive, self-contained HTML/CSS/JS TV experience for the current song in the 'flashUiHtml' field.",
+      "Model-owned TV UX: you are not filling a template. You are the visual director for Youtopia's TV/Fire TV surface.",
+      "Core TV UX requirements:",
+      "- Create your own layout, theme, visual metaphor, typography, animation system, and control placement for this exact song. Make it feel custom to the track, artist, mood, audio profile, WLED colors, and current room-lighting context.",
+      "- Required visible content: song title, artist, album or source when available, current play/pause state, progress/duration, and a live visualization that reacts to the audioBins stream.",
+      "- Required controls: play/pause, previous, next, rewind, and fast-forward. You may add volume up/down and like controls if they fit the design.",
+      '- Controls must be real buttons with aria-labels. Send commands with window.parent.postMessage({ type: "youtopiaControl", command: "playPause" }, "*"). Supported command values are: playPause, previous, next, seekBackward, seekForward, volumeDown, volumeUp, toggleLike.',
+      "- Do not make fake controls, mock queues, generic demo sections, sample cards, tutorial copy, placeholders, or anything that is not directly useful for the current Youtopia TV experience.",
+      "- Use the album art if it strengthens the design, but you can also ignore it and invent a different composition when the song calls for it.",
+      "- Keep a true black base (#000000). Layer low-opacity color, particles, scopes, waveforms, typography, and ambient glows above black. Avoid full-screen colored washes.",
+      "- No strobe, blinking, rapid flashing, sudden high-contrast cuts, or abrupt full-screen brightness changes. Smooth all motion and color transitions. Prefer slow cinematic morphs and audio-reactive easing.",
+      "- Keep text readable from across a room on a 16:9 TV. The UI must be responsive, legible, and free of overlap at Fire TV resolutions.",
+      "- Message listeners and live updates: listen to both 'audioBins' and 'playerState' window message events:",
       "  ```javascript",
       "  const targetHeights = new Array(32).fill(0);",
       "  const currentHeights = new Array(32).fill(0);",
@@ -1574,11 +1598,11 @@ export default class LightssIntegration implements IIntegration {
       "    } else if (e.data && e.data.type === 'playerState') {",
       "      const pState = e.data.player;",
       "      const lState = e.data.lightss;",
-      "      // Dynamically update UI text (title, artist, album), images, progress bar (pState.progressPercent), VJ text (lState.hostLine), etc.!",
+      "      // Dynamically update title, artist, album art, progress, play state, VJ text, theme variables, and any custom visual objects.",
       "    }",
       "  });",
       "  ```",
-      "- Butter-Smooth Animations & Lerp (Linear Interpolation): Implement linear interpolation in a requestAnimationFrame loop to ensure all visualizer changes and album art scale pulses feel organic, fluid, and cinematic. E.g.:",
+      "- Butter-smooth animation: implement interpolation in a requestAnimationFrame loop so visualizer changes, layout accents, and color transitions feel organic and fluid. E.g.:",
       "  ```javascript",
       "  function animate() {",
       "    requestAnimationFrame(animate);",
@@ -1590,7 +1614,8 @@ export default class LightssIntegration implements IIntegration {
       "  }",
       "  requestAnimationFrame(animate);",
       "  ```",
-      "- Keep everything fully self-contained in one file (CSS in <style>, JS in <script>). No external scripts or styles except Google Fonts loaded via @import."
+      "- Keep everything fully self-contained in one file (CSS in <style>, JS in <script>). No external scripts, external styles, iframes, forms, audio/video tags, network calls, or inline event-handler attributes.",
+      "- Do not use inline event-handler attributes like onclick/onload. Add listeners from the inline script instead."
     ].join("\n");
   }
 
@@ -1653,9 +1678,7 @@ export default class LightssIntegration implements IIntegration {
   }
 
   private getGeminiModel(): string {
-    return (
-      (this.store.get<"integrations.lightssGeminiModel", string>("integrations.lightssGeminiModel") || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL
-    );
+    return ((this.store.get("integrations.lightssGeminiModel") as string | undefined) || DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL;
   }
 
   private getGeminiApiKey(): string | null {
@@ -1665,9 +1688,8 @@ export default class LightssIntegration implements IIntegration {
 
   private getGeminiBaseUrl(): string {
     const baseUrl =
-      (this.store.get<"integrations.lightssGeminiBaseUrl", string>("integrations.lightssGeminiBaseUrl") || DEFAULT_GEMINI_BASE_URL)
-        .trim()
-        .replace(/\/+$/, "") || DEFAULT_GEMINI_BASE_URL;
+      ((this.store.get("integrations.lightssGeminiBaseUrl") as string | undefined) || DEFAULT_GEMINI_BASE_URL).trim().replace(/\/+$/, "") ||
+      DEFAULT_GEMINI_BASE_URL;
     if (baseUrl.startsWith("http://") || baseUrl.startsWith("https://")) {
       return baseUrl;
     }
@@ -1675,43 +1697,35 @@ export default class LightssIntegration implements IIntegration {
   }
 
   private getOpenAIModel(): string {
-    return (
-      (this.store.get<"integrations.lightssOpenAIModel", string>("integrations.lightssOpenAIModel") || DEFAULT_OPENAI_MODEL).trim() || DEFAULT_OPENAI_MODEL
-    );
+    return ((this.store.get("integrations.lightssOpenAIModel") as string | undefined) || DEFAULT_OPENAI_MODEL).trim() || DEFAULT_OPENAI_MODEL;
   }
 
   private getOpenAIRealtimeModel(): string {
     return (
-      (this.store.get<"integrations.lightssOpenAIRealtimeModel", string>("integrations.lightssOpenAIRealtimeModel") || DEFAULT_OPENAI_REALTIME_MODEL).trim() ||
+      ((this.store.get("integrations.lightssOpenAIRealtimeModel") as string | undefined) || DEFAULT_OPENAI_REALTIME_MODEL).trim() ||
       DEFAULT_OPENAI_REALTIME_MODEL
     );
   }
 
   private getOpenAIRealtimeVoice(): string {
     return (
-      (this.store.get<"integrations.lightssOpenAIRealtimeVoice", string>("integrations.lightssOpenAIRealtimeVoice") || DEFAULT_OPENAI_REALTIME_VOICE).trim() ||
+      ((this.store.get("integrations.lightssOpenAIRealtimeVoice") as string | undefined) || DEFAULT_OPENAI_REALTIME_VOICE).trim() ||
       DEFAULT_OPENAI_REALTIME_VOICE
     );
   }
 
   private getOpenRouterModel(): string {
-    return (
-      (this.store.get<"integrations.lightssOpenRouterModel", string>("integrations.lightssOpenRouterModel") || DEFAULT_OPENROUTER_MODEL).trim() ||
-      DEFAULT_OPENROUTER_MODEL
-    );
+    return ((this.store.get("integrations.lightssOpenRouterModel") as string | undefined) || DEFAULT_OPENROUTER_MODEL).trim() || DEFAULT_OPENROUTER_MODEL;
   }
 
   private getOllamaModel(): string {
-    return (
-      (this.store.get<"integrations.lightssOllamaModel", string>("integrations.lightssOllamaModel") || DEFAULT_OLLAMA_MODEL).trim() || DEFAULT_OLLAMA_MODEL
-    );
+    return ((this.store.get("integrations.lightssOllamaModel") as string | undefined) || DEFAULT_OLLAMA_MODEL).trim() || DEFAULT_OLLAMA_MODEL;
   }
 
   private getOllamaBaseUrl(): string {
     const baseUrl =
-      (this.store.get<"integrations.lightssOllamaBaseUrl", string>("integrations.lightssOllamaBaseUrl") || DEFAULT_OLLAMA_BASE_URL)
-        .trim()
-        .replace(/\/+$/, "") || DEFAULT_OLLAMA_BASE_URL;
+      ((this.store.get("integrations.lightssOllamaBaseUrl") as string | undefined) || DEFAULT_OLLAMA_BASE_URL).trim().replace(/\/+$/, "") ||
+      DEFAULT_OLLAMA_BASE_URL;
     if (baseUrl.startsWith("http://") || baseUrl.startsWith("https://")) {
       return baseUrl;
     }
@@ -1999,6 +2013,25 @@ export default class LightssIntegration implements IIntegration {
     return typeof value === "string" && value.trim() ? value.trim() : fallback;
   }
 
+  private sanitizeFlashUiHtml(value: unknown): string {
+    if (typeof value !== "string") return "";
+    let html = value.trim();
+    if (!html) return "";
+    if (html.startsWith("```html")) html = html.slice(7).trimStart();
+    else if (html.startsWith("```")) html = html.slice(3).trimStart();
+    if (html.endsWith("```")) html = html.slice(0, -3).trimEnd();
+
+    html = html.slice(0, 180_000);
+    html = html.replace(/<script\b[^>]*\bsrc\s*=\s*["'][^"']*["'][^>]*>\s*<\/script>/gi, "");
+    html = html.replace(/<(iframe|object|embed|base|form)\b[\s\S]*?<\/\1>/gi, "");
+    html = html.replace(/<(iframe|object|embed|base|form)\b[^>]*\/?>/gi, "");
+    html = html.replace(/<meta\b[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, "");
+    html = html.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    html = html.replace(/javascript\s*:/gi, "");
+
+    return html;
+  }
+
   private clampNumber(value: unknown, min: number, max: number, fallback: number): number {
     const numberValue = Number(value);
     if (!Number.isFinite(numberValue)) return fallback;
@@ -2097,7 +2130,10 @@ export default class LightssIntegration implements IIntegration {
       scene.vuStyle === "radialWave" ||
       scene.vuStyle === "waveScope" ||
       scene.vuStyle === "pixelBlocks" ||
-      scene.vuStyle === "floatingOrbs"
+      scene.vuStyle === "floatingOrbs" ||
+      scene.vuStyle === "fireFlame" ||
+      scene.vuStyle === "doubleSpectrum" ||
+      scene.vuStyle === "neonPulse"
         ? scene.vuStyle
         : "bars";
     const motion = scene.motion === "static" || scene.motion === "medium" ? scene.motion : "slow";

@@ -3,19 +3,26 @@
     return;
   }
 
-  // Create the AudioContext immediately while the load event's user activation
-  // is still fresh. Electron's autoplay-policy flag only covers media elements,
-  // not Web Audio API — without this eager creation + resume, the analyser
-  // produces all-zero FFT data and the TV VU meter stays dead.
-  var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  // Create the AudioContext lazily once a user activation occurs, preventing
+  // console autoplay policy warnings on page load while keeping WLED and TV
+  // visualizers functional as soon as the UI receives input or begins playing.
+  var audioContext = null;
   var resumePromise = null;
-  if (audioContext.state === "suspended") {
-    resumePromise = audioContext.resume().catch(function() {
-      resumePromise = null;
-    });
+
+  var hasActivation = typeof navigator !== "undefined" && navigator.userActivation && navigator.userActivation.hasBeenActive;
+  if (hasActivation) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === "suspended") {
+      resumePromise = audioContext.resume().catch(function() {
+        resumePromise = null;
+      });
+    }
   }
 
   var resumeOnInteraction = function() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
     if (audioContext && audioContext.state === "suspended") {
       audioContext.resume();
     }
@@ -35,15 +42,6 @@
   var ZERO_FRAME_REBUILD_THRESHOLD = 30;
   var forceResumeTimer = null;
   var FORCE_RESUME_INTERVAL_MS = 400;
-
-  // createMediaElementSource() may only be called ONCE per media element for the
-  // lifetime of the AudioContext; calling it again throws. Cache the source node
-  // per element so analyser rebuilds (track changes, compressor toggles) reuse it.
-  // Unlike captureStream(), a MediaElementSource removes the element's audio from
-  // the default output, so it MUST be routed to audioContext.destination or the
-  // user hears nothing. We therefore always connect a passthrough to destination.
-  var elementSourceMap = new WeakMap();
-  var passthroughToDestination = null;
 
   var compressorSettings = {
     enabled: true,
@@ -86,9 +84,8 @@
   }
 
   function disconnectAnalyzer() {
-    // NOTE: never disconnect/null the cached MediaElementSource's path to destination
-    // here. That path is the only one carrying the element's audio to the speakers and
-    // the source cannot be recreated. We only detach + tear down the analyser branch.
+    // The analyzer graph is capture-stream only and is never connected to
+    // destination, so tearing it down cannot mute or reduce playback volume.
     if (sourceNode) {
       try {
         if (compressorNode) sourceNode.disconnect(compressorNode);
@@ -122,31 +119,13 @@
     return null;
   }
 
-  // Return a cached MediaElementSource for the element, creating it at most once.
-  // Also wires a guaranteed passthrough to destination so audible output never drops.
-  // Returns null if the element cannot be used as a source.
-  function getElementSource(mediaElement) {
-    var existing = elementSourceMap.get(mediaElement);
-    if (existing) return existing;
-    if (typeof audioContext.createMediaElementSource !== "function") return null;
-    try {
-      var node = audioContext.createMediaElementSource(mediaElement);
-      elementSourceMap.set(mediaElement, node);
-      if (!passthroughToDestination) {
-        passthroughToDestination = audioContext.createGain();
-        passthroughToDestination.gain.value = 1.0;
-        passthroughToDestination.connect(audioContext.destination);
-      }
-      node.connect(passthroughToDestination);
-      return node;
-    } catch (e) {
-      return null;
-    }
-  }
-
   function ensureRunning() {
-    if (audioContext.state === "suspended") {
-      if (!resumePromise) {
+    var hasActivation = typeof navigator !== "undefined" && navigator.userActivation && navigator.userActivation.hasBeenActive;
+    if (hasActivation && !audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext && audioContext.state === "suspended") {
+      if (hasActivation && !resumePromise) {
         resumePromise = audioContext.resume().then(function() {
           resumePromise = null;
         }).catch(function() {
@@ -195,13 +174,18 @@
 
     disconnectAnalyzer();
 
-    // Use a cached MediaElementSource instead of captureStream(). captureStream()
-    // could intermittently take over the element's audio output once the context
-    // actually resumed (leaving playback near-silent) and produced unreliable FFT.
-    // MediaElementSource is deterministic: the analyser is tapped off it and a
-    // guaranteed passthrough routes audio to destination so sound always plays.
-    var elementSource = getElementSource(mediaElement);
-    if (!elementSource) return false;
+    // Sample the element with captureStream() so Web Audio never owns the audible
+    // output path. createMediaElementSource() reroutes the media element through
+    // the AudioContext and has regressed playback volume/output before; this graph
+    // is analyzer-only and is intentionally never connected to destination.
+    var mediaStream = getCapturedStream(mediaElement);
+    if (!mediaStream) return false;
+
+    var hasActivation = typeof navigator !== "undefined" && navigator.userActivation && navigator.userActivation.hasBeenActive;
+    if (hasActivation && !audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (!audioContext || typeof audioContext.createMediaStreamSource !== "function") return false;
 
     // Attach listeners to the media element to resume context on playback events
     var onPlayEvent = function() {
@@ -215,7 +199,7 @@
     });
 
     try {
-      sourceNode = elementSource;
+      sourceNode = audioContext.createMediaStreamSource(mediaStream);
       analyzerNode = audioContext.createAnalyser();
       analyzerNode.fftSize = 64;
       analyzerNode.smoothingTimeConstant = 0.75;
@@ -228,10 +212,9 @@
         compressorNode.ratio.setValueAtTime(compressorSettings.ratio, audioContext.currentTime);
         compressorNode.attack.setValueAtTime(compressorSettings.attack, audioContext.currentTime);
         compressorNode.release.setValueAtTime(compressorSettings.release, audioContext.currentTime);
-        // The analyser branch is a dead end (never connected to destination), so the
-        // compressor + makeup gain here only shape the signal feeding the FFT/WLED
-        // analysis -- never the audible output, which comes solely from the
-        // source -> passthrough -> destination path.
+        // FM-style makeup gain: this shapes only the FFT/WLED analysis branch, not
+        // audible playback volume, because the capture-stream graph is a dead end
+        // and is never connected to audioContext.destination.
         makeupGainNode = audioContext.createGain();
         makeupGainNode.gain.setValueAtTime(1.65, audioContext.currentTime);
 

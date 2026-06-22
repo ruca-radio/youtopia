@@ -206,6 +206,7 @@ lightss.onAiMessage(message => {
 let lastUrl = "";
 let lastVideoId = "";
 let lastPlaylistId = "";
+let lastSkippedVideoId = "";
 
 let companionAuthWindowEnableTimeout: NodeJS.Timeout | null = null;
 let ytmViewLoadTimeout: NodeJS.Timeout | null = null;
@@ -581,7 +582,8 @@ const store = new Conf<StoreSchema>({
       continueWhereYouLeftOffPaused: true,
       enableSpeakerFill: false,
       progressInTaskbar: false,
-      ratioVolume: false
+      ratioVolume: false,
+      excludeAiMusicFromPlaylists: false
     },
     integrations: {
       companionServerEnabled: false,
@@ -632,7 +634,7 @@ const store = new Conf<StoreSchema>({
       lightssWledPrompt:
         "You are the WLED Control Agent for an agentic home theater. Your role is to choose safe WLED lighting settings.\nReturn JSON matching the schema precisely.\nRules: No strobe, blinking, or sudden flashing.\nAlways soften transition and flash intensity. Long transitions (transitionMs >= 900) are required.\nGenerate a sequence of exactly 4 steps representing the song's energy progression (e.g. verse, chorus, bridge, outro).\nUse only safe effect and palette IDs.\nAvoid mid-song jumps; morph colors gradually.",
       lightssCanvasPrompt:
-        "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nChoose from the available visualizer styles (vuStyle): bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope line), pixelBlocks (retro block grid), and floatingOrbs (bouncing bubbles).\nSet the vuRotation (0 to 360 degrees) and vuColorShift (0 to 360 degrees hue shift) to rotate and recolor the visualizer to match the track.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely.",
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display.\nYour role is to design premium TV layouts and visualizer styling.\nChoose from the available visualizer styles (vuStyle): bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope line), pixelBlocks (retro block grid), floatingOrbs (bouncing bubbles), fireFlame (organic warm flickering flickering columns), doubleSpectrum (symmetrical mirrored top-bottom waves), and neonPulse (cyberpunk glowing glass neon laser tubes with white core filaments).\nSet the vuRotation (0 to 360 degrees) and vuColorShift (0 to 360 degrees hue shift) to rotate and recolor the visualizer to match the track.\nKeep a true black base (#000000 background) for maximum contrast and TV protection.\nAvoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.\nChoose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene.\nReturn JSON matching the schema precisely.",
       lightssHostPrompt:
         "You are the late-night VJ and Scrolling Ticker Agent.\nGenerate scrolling facts, commentary, and status updates for the TV host line and scrolling bottom ticker.\nWrite one vivid, personality-filled host line under 140 characters. Keep it late-night VJ style, aware of the track.\nWrite a ticker message as a single, concise line of fun facts, lighting notes, or playful host commentary.\nReturn JSON matching the schema precisely.",
       audioCompressorEnabled: true,
@@ -700,6 +702,9 @@ const store = new Conf<StoreSchema>({
       }
     },
     ">=2.0.12": store => {
+      if (!store.has("playback.excludeAiMusicFromPlaylists")) {
+        store.set("playback.excludeAiMusicFromPlaylists", false);
+      }
       if (!store.has("appearance.vuMeterStyle")) {
         store.set("appearance.vuMeterStyle", VuMeterStyle.Bars);
       }
@@ -859,7 +864,20 @@ const store = new Conf<StoreSchema>({
         "Select custom fonts (e.g., Outfit, Orbitron, Inter, Roboto Mono) and visualizer style choices that match the song genre.",
         "Perform your analysis internally and output ONLY the valid JSON object matching the schema precisely. Do not output any freeform text or markdown outside the JSON."
       ].join("\n");
-      if (!currentCanvas || currentCanvas === oldCanvas || currentCanvas === oldCanvas9Line) {
+      const oldCanvas11Line = [
+        "You are the Screen Drawing and TV Canvas Agent for an agentic display. Your role is to design premium TV layouts and responsive visualizers.",
+        "Coordinate with the WLED Control Agent: keep TV colors (accentColor, vuLowColor, vuMidColor, vuHighColor) aligned with WLED primary/secondary color direction.",
+        "Coordinate with the VJ Host Agent: leave a stable lower-left stage for scrolling host text. Do not overlap or clutter that area.",
+        "Keep a true black base (#000000 background) for maximum contrast, OLED screen protection, and WLED bias visibility.",
+        "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
+        "Choose a visualizer style (vuStyle) from: bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope), pixelBlocks (retro blocks), or floatingOrbs (bouncing bubbles).",
+        "Set vuRotation (0-360) to rotate the visualizer dynamically, and vuColorShift (0-360) to recolor it via hue shift filter.",
+        "Design layouts that feel premium and modern: center content gracefully, use thin typography for track details, and place subtle glowing borders or dropshadows around card containers.",
+        "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene. TV VU hot colors must complement or match the WLED primary color, not plain white.",
+        "Select custom fonts (e.g., Outfit, Orbitron, Inter, Roboto Mono) and visualizer style choices that match the song genre.",
+        "Perform your analysis internally and output ONLY the valid JSON object matching the schema precisely. Do not output any freeform text or markdown outside the JSON."
+      ].join("\n");
+      if (!currentCanvas || currentCanvas === oldCanvas || currentCanvas === oldCanvas9Line || currentCanvas === oldCanvas11Line) {
         store.set(
           "integrations.lightssCanvasPrompt",
           [
@@ -868,7 +886,7 @@ const store = new Conf<StoreSchema>({
             "Coordinate with the VJ Host Agent: leave a stable lower-left stage for scrolling host text. Do not overlap or clutter that area.",
             "Keep a true black base (#000000 background) for maximum contrast, OLED screen protection, and WLED bias visibility.",
             "Avoid all flashing, strobing, or bright-white sweeps. Visual elements must move slowly and elegantly.",
-            "Choose a visualizer style (vuStyle) from: bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope), pixelBlocks (retro blocks), or floatingOrbs (bouncing bubbles).",
+            "Choose a visualizer style (vuStyle) from: bars, classicLed, dotMatrix, spectrumLine, albumGlow, radialWave (circular spectrum), waveScope (oscilloscope), pixelBlocks (retro blocks), floatingOrbs (bouncing bubbles), fireFlame (organic warm flickering flame columns), doubleSpectrum (symmetrical mirrored top-bottom waves), or neonPulse (cyberpunk glowing glass neon laser tubes with white core filaments).",
             "Set vuRotation (0-360) to rotate the visualizer dynamically, and vuColorShift (0-360) to recolor it via hue shift filter.",
             "Design layouts that feel premium and modern: center content gracefully, use thin typography for track details, and place subtle glowing borders or dropshadows around card containers.",
             "Choose colors (backgroundColor, accentColor, vuLowColor, vuMidColor, vuHighColor) that feel like one coordinated scene. TV VU hot colors must complement or match the WLED primary color, not plain white.",
@@ -918,7 +936,7 @@ const store = new Conf<StoreSchema>({
         "integrations.lightssAnalystModel",
         "integrations.lightssSketchModel",
         "integrations.lightssGeminiModel"
-      ];
+      ] as const;
       for (const key of keysToMigrate) {
         if (store.has(key)) {
           const val = store.get(key) as string;
@@ -2103,10 +2121,16 @@ app.on("ready", async () => {
     if (!mainWindow || event.sender !== mainWindow.webContents) return;
     if (!ytmView) return;
 
-    const allowedCommands = new Set(["playPause", "previous", "next", "toggleLike", "toggleDislike", "volumeUp", "volumeDown"]);
+    const allowedCommands = new Set(["playPause", "previous", "next", "seekBackward", "seekForward", "toggleLike", "toggleDislike", "volumeUp", "volumeDown"]);
     if (!allowedCommands.has(command)) return;
 
-    ytmView.webContents.send("remoteControl:execute", command);
+    if (command === "seekBackward") {
+      ytmView.webContents.send("remoteControl:execute", "seekRelative", -10);
+    } else if (command === "seekForward") {
+      ytmView.webContents.send("remoteControl:execute", "seekRelative", 10);
+    } else {
+      ytmView.webContents.send("remoteControl:execute", command);
+    }
   });
 
   ipcMain.on("audioAnalyzer:subscribe", event => {
@@ -2212,6 +2236,7 @@ app.on("ready", async () => {
       ratioVolume.ytmViewLoaded();
       // TODO: this is just a hack fix for custom css to update CSS when the view loads
       customCss.updateCSS();
+      ytmView.webContents.send("settings:stateChanged", store.store);
       if (audioAnalyzerSubscribed) {
         ytmView.webContents.send("audioAnalyzer:control", "start");
       }
@@ -2262,6 +2287,21 @@ app.on("ready", async () => {
 
   ipcMain.on("ytmView:videoDataChanged", (event, videoDetails, playlistId, album, likeStatus, hasFullMetadata) => {
     if (event.sender !== ytmView.webContents) return;
+
+    const excludeAi = store.get("playback.excludeAiMusicFromPlaylists");
+    if (excludeAi && playlistId) {
+      const title = videoDetails?.title || "";
+      const author = videoDetails?.author || "";
+      const albumText = album?.text || "";
+      if (isAiGeneratedTrack(title, author, albumText)) {
+        if (videoDetails.videoId !== lastSkippedVideoId) {
+          lastSkippedVideoId = videoDetails.videoId;
+          log.info(`[AI Filter] Automatically skipping AI-generated track: "${title}" by "${author}" (Album: "${albumText}") in playlist: "${playlistId}"`);
+          ytmView.webContents.send("remoteControl:execute", "next");
+          return;
+        }
+      }
+    }
 
     lastVideoId = videoDetails.videoId;
     lastPlaylistId = playlistId;
@@ -2851,3 +2891,53 @@ app.on("activate", () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
+
+function isAiGeneratedTrack(title: string, author: string, album: string | null): boolean {
+  const t = (title || "").toLowerCase();
+  const a = (author || "").toLowerCase();
+  const al = (album || "").toLowerCase();
+
+  // Explicit AI-generated tags/artists/platforms
+  const aiKeywords = [
+    "suno ai",
+    "udio ai",
+    "soundraw",
+    "beatoven",
+    "boomy",
+    "mubert",
+    "loudly",
+    "stable audio",
+    "musicgen",
+    "ai-generated",
+    "ai generated",
+    "generative ai",
+    "artificial intelligence",
+    "generative-ai"
+  ];
+
+  if (aiKeywords.some(keyword => t.includes(keyword) || a.includes(keyword) || al.includes(keyword))) {
+    return true;
+  }
+
+  // Exact platform match (with word boundaries) for "suno", "udio", "aiva"
+  const wordBoundaryPlatforms = /\b(suno|udio|aiva)\b/i;
+  if (wordBoundaryPlatforms.test(t) || wordBoundaryPlatforms.test(a) || wordBoundaryPlatforms.test(al)) {
+    return true;
+  }
+
+  // AI Cover / Remix / Version patterns
+  const aiPatterns = [
+    /\b(ai|a\.i\.)\s+(cover|remix|version|generated|song|music|track|jingle|voice|vocal)\b/i,
+    /[([](ai|a\.i\.)\s*(cover|remix|version|edit|gen|generated|produced|voice|vocals)[)\]]/i,
+    /\bfeat\.\s+(ai|a\.i\.)\b/i,
+    /\bft\.\s+(ai|a\.i\.)\b/i,
+    /\b(ai|a\.i\.)\s+feat\b/i,
+    /\b(ai|a\.i\.)\s+ft\b/i
+  ];
+
+  if (aiPatterns.some(pattern => pattern.test(t) || pattern.test(a) || pattern.test(al))) {
+    return true;
+  }
+
+  return false;
+}

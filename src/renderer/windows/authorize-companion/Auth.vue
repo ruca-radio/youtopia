@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeMount, ref } from "vue";
+import logo from "~assets/icons/ytmd.png";
 
 const appName = ref("");
 const code = ref("");
@@ -21,6 +22,7 @@ onBeforeMount(async () => {
 <template>
   <div class="container-wrapper">
     <div class="container">
+      <img :src="logo" class="auth-logo" alt="Youtopia" />
       <h1 class="title">Companion Authorization Request</h1>
       <p class="subtitle">
         <b>{{ appName }}</b> would like to control Youtopia
@@ -107,7 +109,11 @@ onBeforeMount(async () => {
   background-color: #d32f2f;
 }
 
-.deny:hover {
-  background-color: #c62828;
+.auth-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  margin-bottom: 24px;
+  filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.45));
 }
 </style>

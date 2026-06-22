@@ -3,3 +3,4 @@ declare module "*?raw" {
   export default content;
 }
 declare module "*.png";
+declare module "*.css";

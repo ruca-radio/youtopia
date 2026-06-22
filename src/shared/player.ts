@@ -46,7 +46,10 @@ export type RendererLightssVuStyle =
   | "radialWave"
   | "waveScope"
   | "pixelBlocks"
-  | "floatingOrbs";
+  | "floatingOrbs"
+  | "fireFlame"
+  | "doubleSpectrum"
+  | "neonPulse";
 
 export type RendererLightssVisualScene = {
   backgroundStyle: "solid" | "gradient";

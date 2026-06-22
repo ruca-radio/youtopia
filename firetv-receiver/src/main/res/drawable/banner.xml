@@ -1,24 +1,15 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="320dp"
-    android:height="180dp"
-    android:viewportWidth="320"
-    android:viewportHeight="180">
-    <path
-        android:fillColor="#000000"
-        android:pathData="M0,0h320v180h-320z" />
-    <path
-        android:fillColor="#111827"
-        android:pathData="M18,18h284a18,18 0,0 1,18 18v108a18,18 0,0 1,-18 18h-284a18,18 0,0 1,-18 -18v-108a18,18 0,0 1,18 -18z" />
-    <path
-        android:fillColor="#22C55E"
-        android:pathData="M42,48h24l42,55l42,-55h24l-53,69v28h-26v-28z" />
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M101,66l60,37l-60,37z" />
-    <path
-        android:fillColor="#D946EF"
-        android:pathData="M38,144h226v8h-226z" />
-    <path
-        android:fillColor="#22C55E"
-        android:pathData="M242,68a9,9 0,1 0,0.1 0M268,68a9,9 0,1 0,0.1 0M294,68a9,9 0,1 0,0.1 0" />
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- True Black background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+        </shape>
+    </item>
+    <!-- Centered masculine Youtopia logo -->
+    <item android:gravity="center">
+        <bitmap
+            android:src="@drawable/youtopia_logo_image"
+            android:gravity="center" />
+    </item>
+</layer-list>

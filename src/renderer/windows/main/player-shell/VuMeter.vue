@@ -103,6 +103,27 @@ const styleClass = computed(() => {
       case VuMeterStyle.AlbumGlow:
         styleName = "albumGlow";
         break;
+      case VuMeterStyle.RadialWave:
+        styleName = "radialWave";
+        break;
+      case VuMeterStyle.WaveScope:
+        styleName = "waveScope";
+        break;
+      case VuMeterStyle.PixelBlocks:
+        styleName = "pixelBlocks";
+        break;
+      case VuMeterStyle.FloatingOrbs:
+        styleName = "floatingOrbs";
+        break;
+      case VuMeterStyle.FireFlame:
+        styleName = "fireFlame";
+        break;
+      case VuMeterStyle.DoubleSpectrum:
+        styleName = "doubleSpectrum";
+        break;
+      case VuMeterStyle.NeonPulse:
+        styleName = "neonPulse";
+        break;
       case VuMeterStyle.Bars:
       default:
         styleName = "bars";
@@ -119,6 +140,9 @@ const styleClass = computed(() => {
   if (styleName === "waveScope") return "style-wave-scope";
   if (styleName === "pixelBlocks") return "style-pixel-blocks";
   if (styleName === "floatingOrbs") return "style-floating-orbs";
+  if (styleName === "fireFlame") return "style-fire-flame";
+  if (styleName === "doubleSpectrum") return "style-double-spectrum";
+  if (styleName === "neonPulse") return "style-neon-pulse";
   return "style-bars";
 });
 
@@ -418,6 +442,56 @@ const computedColorShift = computed(() => {
   transition: transform 100ms cubic-bezier(0.1, 0.8, 0.3, 1);
 }
 
+/* Style: fireFlame */
+.vu-meter.style-fire-flame span {
+  width: clamp(6px, 1.8vw, 28px);
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(to top, #ef4444, #f97316 45%, #facc15 85%, #ffffff 100%);
+  box-shadow:
+    0 0 14px rgba(249, 115, 22, 0.6),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  animation: vu-flicker 1.2s ease-in-out infinite alternate;
+}
+
+/* Style: doubleSpectrum */
+.vu-meter.style-double-spectrum {
+  align-items: center;
+}
+.vu-meter.style-double-spectrum span {
+  height: calc(var(--vu-base) * 0.8 + 6px) !important;
+  background: linear-gradient(
+    to bottom,
+    var(--vu-color-high, #ef4444),
+    var(--vu-color-mid, #facc15) 40%,
+    var(--vu-color-low, #22c55e) 50%,
+    var(--vu-color-mid, #facc15) 60%,
+    var(--vu-color-high, #ef4444)
+  );
+  border-radius: 6px;
+}
+
+/* Style: neonPulse */
+.vu-meter.style-neon-pulse span {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--vu-color-high, #ef4444);
+  box-shadow:
+    0 0 10px var(--vu-color-high, #ef4444),
+    inset 0 0 4px var(--vu-color-mid, #facc15);
+  position: relative;
+}
+.vu-meter.style-neon-pulse span::after {
+  content: "";
+  position: absolute;
+  top: 10%;
+  left: calc(50% - 0.75px);
+  width: 1.5px;
+  height: 80%;
+  background: #ffffff;
+  border-radius: 999px;
+  opacity: 0.9;
+  box-shadow: 0 0 6px #ffffff;
+}
+
 .vu-meter.idle span,
 .vu-meter.disabled span {
   animation: none;
@@ -434,6 +508,17 @@ const computedColorShift = computed(() => {
   }
   100% {
     height: var(--vu-base);
+  }
+}
+
+@keyframes vu-flicker {
+  0% {
+    opacity: 0.88;
+    filter: brightness(0.9) blur(0.2px);
+  }
+  100% {
+    opacity: 1;
+    filter: brightness(1.1) blur(0.6px);
   }
 }
 </style>

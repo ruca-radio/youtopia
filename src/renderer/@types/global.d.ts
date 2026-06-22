@@ -18,6 +18,16 @@ declare global {
         encryptString(value: string): Buffer;
       };
       openSettingsWindow(): void;
+      openFlashUiWindow(): void;
+      ai?: {
+        fetchModels(provider: string, baseUrl?: string, apiKey?: string): Promise<string[]>;
+        chat(options: {
+          provider: string;
+          model: string;
+          systemPrompt?: string;
+          messages: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+        }): Promise<string>;
+      };
       restartApplication(): void;
       restartApplicationForUpdate(): void;
       getTrueFilePath(file: File): string;

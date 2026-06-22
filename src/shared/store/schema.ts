@@ -41,7 +41,14 @@ export enum VuMeterStyle {
   ClassicLed = 1,
   DotMatrix = 2,
   SpectrumLine = 3,
-  AlbumGlow = 4
+  AlbumGlow = 4,
+  RadialWave = 5,
+  WaveScope = 6,
+  PixelBlocks = 7,
+  FloatingOrbs = 8,
+  FireFlame = 9,
+  DoubleSpectrum = 10,
+  NeonPulse = 11
 }
 
 export enum LightssAiProvider {
@@ -82,6 +89,7 @@ export type StoreSchema = {
     enableSpeakerFill: boolean;
     progressInTaskbar: boolean;
     ratioVolume: boolean;
+    excludeAiMusicFromPlaylists: boolean;
   };
   integrations: {
     companionServerEnabled: boolean;

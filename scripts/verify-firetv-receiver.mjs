@@ -38,15 +38,15 @@ const checks = [
   },
   {
     file: "firetv-receiver/src/main/res/drawable/ic_launcher.xml",
-    patterns: [/vector/, /#000000/, /#22C55E/, /#D946EF/],
+    patterns: [/bitmap/, /youtopia_logo_image/],
   },
   {
     file: "firetv-receiver/src/main/res/drawable/splash_logo.xml",
-    patterns: [/vector/, /#22C55E/, /#D946EF/, /#F8FAFC/],
+    patterns: [/bitmap/, /youtopia_logo_image/],
   },
   {
     file: "firetv-receiver/src/main/res/drawable/banner.xml",
-    patterns: [/vector/, /#22C55E/, /#D946EF/, /#F8FAFC/],
+    patterns: [/layer-list/, /#000000/, /bitmap/, /youtopia_logo_image/],
   },
   {
     file: "scripts/build-firetv-receiver.sh",
